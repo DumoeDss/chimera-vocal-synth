@@ -1,11 +1,13 @@
-//! Lyrics → sung syllables. Words come from the pronouncing dictionary (unreduced: sung function
-//! words keep full vowels), are split into syllables by the maximal-onset principle with English
-//! onset clusters, and the spelling is split to match for display ("twin-kle").
+//! Lyrics → sung syllables. Hangul words go to [`super::korean`], one syllable per block. Other
+//! words come from the pronouncing dictionary (unreduced: sung function words keep full vowels),
+//! are split into syllables by the maximal-onset principle with English onset clusters, and the
+//! spelling is split to match for display ("twin-kle").
 //! Typed hyphens force syllable breaks; a lone "-" (or "~") holds the previous vowel onto the
 //! next note (melisma), as in vocaloid editors.
 
 use crate::anatomy::human::BodyMix;
 use super::english::js_is_space;
+use super::korean::{is_hangul, word_syllables};
 use super::planner::is_vowel;
 use super::{Segment, Syllable};
 use serde::{Deserialize, Serialize};
@@ -151,13 +153,21 @@ fn is_word_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '\''
 }
 
-/// `text.match(/[A-Za-z'][A-Za-z'\-]*|(?<=\s|^)[~-](?=\s|$)|[.,;:!?\n]/g)`
+/// `text.match(/[A-Za-z'][A-Za-z'\-]*|[가-힣]+|(?<=\s|^)[~-](?=\s|$)|[.,;:!?\n]/g)`
 fn lyric_tokens(text: &str) -> Vec<String> {
     let s: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
     while i < s.len() {
         let c = s[i];
+        if is_hangul(c) {
+            let start = i;
+            while i < s.len() && is_hangul(s[i]) {
+                i += 1;
+            }
+            out.push(s[start..i].iter().collect());
+            continue;
+        }
         if is_word_start(c) {
             let start = i;
             i += 1;
@@ -193,6 +203,10 @@ pub fn lyrics_to_syllables(text: &str, g2p: &impl WordSource) -> Vec<Syllable> {
                 let s = Syllable { text: "~".into(), onset: vec![], nucleus: prev.nucleus.clone(), coda: vec![], melisma: Some(true), word_end: prev.word_end, phrase_end: false };
                 out.push(s);
             }
+            continue;
+        }
+        if tok.starts_with(is_hangul) {
+            out.extend(word_syllables(tok));
             continue;
         }
         // typed hyphens split syllables explicitly ("ti-ger"); otherwise the dictionary decides
