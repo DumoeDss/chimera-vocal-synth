@@ -155,6 +155,8 @@ export interface Segment {
   stress?: number;
   f0?: number;
   wordEnd?: boolean;
+  /** a voiceless stop or affricate's aspiration as its front end decides it (unset: English's rule) */
+  aspirated?: boolean;
 }
 
 export interface PlannedSegment {

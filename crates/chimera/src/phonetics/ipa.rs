@@ -61,6 +61,14 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             i += 1;
             continue;
         }
+        // aspiration marks: ʰ aspirated, ˭ unaspirated (the front end's call; see Segment::aspirated)
+        if ch == 'ʰ' || ch == '˭' {
+            if let Some(last) = out.last_mut() {
+                last.aspirated = Some(ch == 'ʰ');
+            }
+            i += 1;
+            continue;
+        }
         if ch == 'ː' || ch == ':' {
             if let Some(last) = out.last_mut() {
                 let first = last.ipa.chars().next();
