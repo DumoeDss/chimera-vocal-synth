@@ -4,7 +4,11 @@
  * vowel-space interpolation for the vowel map. Never runs inside the audio thread.
  */
 import { airwayModel, dropAirwayModel, airwayFrame, airwayAreas, airwayTransfer, TractMap, NEUTRAL, ARTIC_KEYS, VOWELS, VOWEL_TARGETS, type AirwayModel, type HumanArtic, type HumanBody, type HumanFrame } from "../wasm/engine.ts";
+
 import { bodyWeights, type BodyMix } from "./body.ts";
+
+/** apical vowels: sung, but not points in the vowel space */
+const APICAL = new Set(["ɿ", "ʅ"]);
 
 export interface VowelPoint {
   ipa: string;
@@ -41,7 +45,9 @@ export class VoiceModel {
     const parts = bodyWeights(body)
       .filter(([, w]) => w > 0)
       .map(([n, w]) => ({ w, table: VOWEL_TARGETS[n] ?? {} }));
-    this.vowels = VOWELS.filter((v) => parts.every((p) => p.table[v.ipa])).map((v) => {
+    // the vowel space (chart, pad, readouts) leaves out the apical vowels ɿ ʅ (Mandarin 四 si, 是 shi):
+    // a consonant's tongue held open, not a point among the vowels; the planner still sings them
+    this.vowels = VOWELS.filter((v) => !APICAL.has(v.ipa) && parts.every((p) => p.table[v.ipa])).map((v) => {
       const at = (f: (t: (typeof parts)[number]["table"][string]) => number | undefined) => {
         let acc = 0, ws = 0;
         for (const p of parts) {
