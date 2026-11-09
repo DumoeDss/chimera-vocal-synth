@@ -9,6 +9,12 @@ Score: syllable errors (Chinese: toneless pinyin; Korean: Hangul blocks) or word
 
 usage: scramble.py <outdir> [--langs zh,ko,en] [--shuffles 3] [--bodies male,female]
                    [--text lang:file]   (your own lines for one language, one line per phrase)
+       scramble.py --analyze <outdir>/scramble.json   (the confusions of an earlier run)
+
+Besides the error rates it reports what goes wrong: each sung line's syllables are aligned with what
+the recogniser heard, and the substitutions split into the parts of a syllable (Chinese: initial,
+final, tone; Korean: initial, vowel, final), with the commonest confusions. That's what says what to
+fix next; one error rate doesn't.
 Needs the release CLI (cargo build --release -p chimera-cli) and tools/asr/setup.sh.
 The texts are public domain: two Tang poems (静夜思, 春晓), the folk song 아리랑, Harvard sentences.
 """
@@ -112,10 +118,123 @@ def scorer(lang):
     return lambda s: re.sub(r"[^a-z' ]+", " ", s.lower()).split()
 
 
+# ---------------------------------------------------------------- confusions
+
+PINYIN_INITIALS = ["zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x", "r", "z", "c", "s", "y", "w"]
+
+
+def zh_parts(text):
+    """Chinese text → (initial, final, tone) per character (toneless initial/final from pypinyin)."""
+    from pypinyin import Style, pinyin
+    from zhconv import convert
+    han = re.sub(r"[^\u4e00-\u9fff]", "", convert(text, "zh-cn"))
+    out = []
+    for (p,) in pinyin(han, style=Style.TONE3, neutral_tone_with_five=True):
+        tone = p[-1] if p[-1].isdigit() else "5"
+        base = p.rstrip("012345")
+        ini = next((i for i in PINYIN_INITIALS if base.startswith(i) and len(base) > len(i)), "")
+        out.append((ini or "∅", base[len(ini):], tone))
+    return out
+
+
+KO_I = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+KO_V = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+KO_F = ["∅"] + list("ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ")
+
+
+def ko_parts(text):
+    out = []
+    for c in re.findall(r"[\uac00-\ud7a3]", text):
+        k = ord(c) - 0xAC00
+        out.append((KO_I[k // 588], KO_V[(k % 588) // 28], KO_F[k % 28]))
+    return out
+
+
+def align(r, h, same):
+    """Edit-distance alignment of two unit lists: [(ref or None, hyp or None)]."""
+    n, m = len(r), len(h)
+    d = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        d[i][0] = i
+    for j in range(m + 1):
+        d[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (0 if same(r[i - 1], h[j - 1]) else 1))
+    out, i, j = [], n, m
+    while i or j:
+        if i and j and d[i][j] == d[i - 1][j - 1] + (0 if same(r[i - 1], h[j - 1]) else 1):
+            out.append((r[i - 1], h[j - 1])); i -= 1; j -= 1
+        elif i and d[i][j] == d[i - 1][j] + 1:
+            out.append((r[i - 1], None)); i -= 1
+        else:
+            out.append((None, h[j - 1])); j -= 1
+    return out[::-1]
+
+
+def confusions(results, lang, keep=lambda x: x["variant"] != "real"):
+    """Where a language's syllables go wrong, over the runs `keep` selects."""
+    from collections import Counter
+    parts = zh_parts if lang == "zh" else ko_parts if lang == "ko" else None
+    if parts is None:
+        return None
+    names = ("initial", "final", "tone") if lang == "zh" else ("initial", "vowel", "final")
+    tally = Counter()
+    pair = {n: Counter() for n in names}
+    wrong_ref = {n: Counter() for n in names}
+    seen = {n: Counter() for n in names}
+    for x in results:
+        if x["lang"] != lang or not keep(x):
+            continue
+        for ref, hyp in zip(x["ref"], x["hyp"]):
+            r, h = parts(ref), parts(hyp)[: 2 * len(parts(ref))]
+            # syllables align on initial + final (Chinese) or the whole block (Korean); tone is scored after
+            key = (lambda p: p[:2]) if lang == "zh" else (lambda p: p)
+            for a, b in align(r, h, lambda a, b: key(a) == key(b)):
+                if a is None:
+                    tally["inserted"] += 1
+                    continue
+                tally["syllables"] += 1
+                if b is None:
+                    tally["deleted"] += 1
+                    continue
+                for k, n in enumerate(names):
+                    seen[n][a[k]] += 1
+                    if a[k] != b[k]:
+                        tally[n] += 1
+                        pair[n][(a[k], b[k])] += 1
+                        wrong_ref[n][a[k]] += 1
+    return tally, pair, wrong_ref, seen, names
+
+
+def report(results, langs):
+    for lang in langs:
+        c = confusions(results, lang)
+        if not c:
+            continue
+        tally, pair, wrong_ref, seen, names = c
+        n = tally["syllables"] or 1
+        heard = n - tally["deleted"]
+        print(f"\n{lang} scrambled, {n} syllables: deleted {tally['deleted'] / n:.0%}, inserted {tally['inserted'] / n:.0%}; "
+              + ", ".join(f"{k} wrong {tally[k] / max(1, heard):.0%}" for k in names) + " (of the syllables heard)")
+        for k in names:
+            worst = sorted(((wrong_ref[k][u] / seen[k][u], u, seen[k][u]) for u in seen[k] if seen[k][u] >= 6), reverse=True)[:8]
+            print(f"  {k:8s} most often wrong: " + "  ".join(f"{u} {r:.0%} (of {s})" for r, u, s in worst))
+            print(f"  {k:8s} top confusions:   " + "  ".join(f"{a}→{b} ×{m}" for (a, b), m in pair[k].most_common(8)))
+
+
 def main():
     args = sys.argv[1:]
     if not args:
         sys.exit(__doc__)
+    if args[0] == "--analyze":
+        results = json.load(open(args[1]))
+        for x in results:  # runs before refs were saved: the scrambles are deterministic per seed
+            if "ref" not in x and x["lang"] in TEXTS:
+                v = x["variant"]
+                x["ref"] = TEXTS[x["lang"]] if v == "real" else scramble(x["lang"], TEXTS[x["lang"]], 100 + int(v.removeprefix("scramble")))
+        report(results, sorted({x["lang"] for x in results}))
+        return
     out = args[0]
     opt = lambda k, d: args[args.index(k) + 1] if k in args else d
     langs = opt("--langs", "zh,ko,en").split(",")
@@ -148,7 +267,7 @@ def main():
                     errs += edits(r, h)
                     total += len(r)
                     hyps.append(s.result.text)
-                results.append({"lang": lang, "body": body, "variant": name, "error": errs / total, "units": total, "hyp": hyps})
+                results.append({"lang": lang, "body": body, "variant": name, "error": errs / total, "units": total, "hyp": hyps, "ref": lines})
                 print(f"{lang} {body:6s} {name:9s} error {errs / total:5.1%}  ({total} units)  {' | '.join(hyps)[:90]}", flush=True)
     with open(os.path.join(out, "scramble.json"), "w") as f:
         json.dump(results, f, ensure_ascii=False, indent=1)
@@ -159,6 +278,7 @@ def main():
             real = next(x["error"] for x in rs if x["variant"] == "real")
             scr = [x["error"] for x in rs if x["variant"] != "real"]
             print(f"{lang:4s}  {body:6s}  {real:5.1%}  {sum(scr) / len(scr):5.1%}")
+    report(results, langs)
 
 
 if __name__ == "__main__":
