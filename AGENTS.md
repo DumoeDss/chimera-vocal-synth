@@ -16,11 +16,12 @@ and the CLI) under a React UI. See the README.
 
 ## Map
 
-- `crates/chimera/`: the engine (no I/O). `crates/chimera-wasm/`: the browser's C ABI.
+- `crates/chimera/`: the engine (no I/O). Lyrics → syllables go through language front ends
+  (`phonetics/syllables.rs` routes; english, korean, mandarin; docs/language-front-ends.md). `crates/chimera-wasm/`: the browser's C ABI.
   `crates/chimera-cli/`: `chimera render | compare csd | compare tsp | diagnose | calibrate`.
 - `src/wasm/`: the UI's facade over the engine. `src/worklet/`: the AudioWorklet. `src/ui/`: React
   and the canvas renderers.
-- `tests/`: bun tests on the wasm build. `tools/`: e2e, layout lint, spectrogram, speech judges
+- `tests/`: bun tests on the wasm build. `tools/`: e2e, layout lint, spectrogram, speech judges, the scramble test (`tools/asr/scramble.py`)
   (`asr/` Whisper, `tsp/` the real speakers' data).
 - `docs/`: architecture, the engine contract (`rust-engine.md`), the UI look, the singer and
   speech judges, and the hill-climb rules.
