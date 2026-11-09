@@ -259,7 +259,7 @@ export async function playDemo(name: string, body: BodyMix, ready?: () => Promis
   const shift = song.octave[nearestBody(body)] * 12;
   const notes = song.notes.map((n, i) => ({ midi: n[0] + shift, beats: n[1], syl: syl[i % syl.length] }));
   const t0 = 0.35;
-  const plan = planSong(notes, { body, bpm: song.bpm, t0, vibrato: useSing.getState().vibrato });
+  const plan = planSong(notes, { body, bpm: song.bpm, t0, vibrato: useSing.getState().vibrato, ...song.extras });
   const beat = 60 / song.bpm;
   let t = t0;
   const times = notes.map((n): [number, number] => {

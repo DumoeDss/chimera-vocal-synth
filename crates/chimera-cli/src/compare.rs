@@ -204,6 +204,7 @@ fn load_notes(path: &str) -> Result<Vec<Note>, String> {
                 melisma: None,
                 word_end: true,
                 phrase_end: false,
+                pitch: vec![],
             },
             phrase_start: false,
             prev_end: f64::NEG_INFINITY,
@@ -290,6 +291,7 @@ fn render_notes(notes: &[Note], body_name: &str, seconds: f64) -> Result<Render,
                 bpm: 60.0,
                 t0: notes[i].start,
                 vibrato: VIBRATO_CENTS,
+                ..Default::default()
             },
         );
         v.schedule(&plan.gestures);
@@ -1288,6 +1290,7 @@ mod tests {
                 melisma: None,
                 word_end: true,
                 phrase_end: true,
+                pitch: vec![],
             },
             phrase_start: true,
             prev_end: f64::NEG_INFINITY,

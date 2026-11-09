@@ -7,6 +7,7 @@
 import { call } from "./chimera.ts";
 import { CREATURE_VISUALS } from "../ui/creatureVisuals.ts";
 import type {
+  SongExtras,
   ArticKey, ArticSpec, BeatPreset, BodyMix, BeatSound, BeatStep, CreatureDef, CreatureTelemetry, DemoSong, Gesture, HumanArtic, HumanBody,
   HumanFrame, Phrase, Plan, Segment, SungNote, Syllable, VoiceSource, VowelRef,
 } from "./types.ts";
@@ -150,7 +151,7 @@ export function planPhrases(phrases: { segments: Segment[]; intonation?: "statem
   return call("planPhrases", { phrases: phrases.map((p) => ({ segments: p.segments, intonation: p.intonation, pause: p.pause })), options });
 }
 
-export function planSong(notes: SungNote[], options: { body: BodyMix; bpm: number; t0: number; vibrato: number }): Plan {
+export function planSong(notes: SungNote[], options: { body: BodyMix; bpm: number; t0: number; vibrato: number } & SongExtras): Plan {
   return call("planSong", { notes, options });
 }
 

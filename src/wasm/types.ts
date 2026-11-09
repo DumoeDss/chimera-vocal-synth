@@ -189,6 +189,22 @@ export interface Syllable {
   melisma?: boolean;
   wordEnd: boolean;
   phraseEnd: boolean;
+  /** pitch bends inside the sung note, written by the syllable's front end (a tone, an accent) */
+  pitch?: Bend[];
+}
+
+/** A bend of the pitch inside a sung note: `st` semitones, at its vowel's start or end, over `len` of the vowel (at most `max` s). */
+export interface Bend {
+  at: "start" | "end";
+  len: number;
+  max: number;
+  st: number;
+}
+
+/** Optional sing-planner settings: nasalised vowels before a nasal coda, sung consonant length. */
+export interface SongExtras {
+  nasalLead?: number;
+  consonantScale?: number;
 }
 
 export interface SungNote {
@@ -232,6 +248,8 @@ export interface DemoSong {
   octave: { male: number; female: number; child: number };
   /** sung syllables from a language front end (IPA), used instead of reading the lyrics as English */
   syllables?: Syllable[];
+  /** sing-planner settings for this song */
+  extras?: SongExtras;
 }
 
 export interface VowelRef {
