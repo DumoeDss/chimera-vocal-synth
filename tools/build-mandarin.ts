@@ -3,7 +3,8 @@
  * Usage: bun tools/build-mandarin.ts   (downloads the pinned sources below)
  * Output: public/data/mandarin.txt.gz, lines "字<TAB>zhong1" (each Han character's most common
  * reading) and "银行<TAB>yin2 hang2" (phrases whose reading differs from their characters' own,
- * which is what decides a polyphone), tone numbers 1-4 and 5 for neutral, ü as v.
+ * which is what decides a polyphone, and every phrase with 儿, which says whether 儿 is a syllable
+ * or an erhua ending), tone numbers 1-4 and 5 for neutral, ü as v.
  *
  * Sources, both MIT (mozillazg): pinyin-data's pinyin.txt (merged from Unicode's Unihan readings,
  * no CC-CEDICT) and phrase-pinyin-data's pinyin.txt (its base phrase list plus overrides; not the
@@ -68,7 +69,9 @@ for (const line of (await get(`${PHRASES}/pinyin.txt`)).split("\n")) {
   const syls = m[2].trim().split(/\s+/).map(numbered);
   if (word.length < 2 || word.length !== syls.length || syls.some((s) => !s) || !word.every(isHan)) continue;
   all++;
-  if (word.some((c, i) => chars.get(c) !== syls[i])) phrases.push(`${m[1]}\t${syls.join(" ")}`);
+  // kept: phrases that read a character otherwise, and every phrase with 儿 (it says whether 儿 is
+  // a syllable, 女儿 er2, or an erhua ending, 一会儿 er5; the front end needs to know which)
+  if (word.some((c, i) => chars.get(c) !== syls[i]) || word.includes("儿")) phrases.push(`${m[1]}\t${syls.join(" ")}`);
 }
 
 const lines = [...[...chars].map(([c, p]) => `${c}\t${p}`), ...phrases];

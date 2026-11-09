@@ -26,7 +26,7 @@ fn mandarin_consonants_are_in_the_inventory() {
     }
 }
 
-const LEX: &str = "你\tni3\n好\thao3\n我\two3\n不\tbu4\n会\thui4\n银\tyin2\n行\txing2\n银行\tyin2 hang2\n走\tzou3\n的\tde5\n跑\tpao3\n一\tyi1\n个\tge4\n绿\tlv4\n学\txue2\n吃\tchi1\n爱\tai4\n去\tqu4\n";
+const LEX: &str = "四\tsi4\n是\tshi4\n点\tdian3\n哪\tna3\n儿\ter2\n女\tnv3\n子\tzi5\n块\tkuai4\n一会儿\tyi1 hui4 er5\n天\ttian1\n你\tni3\n好\thao3\n我\two3\n不\tbu4\n会\thui4\n银\tyin2\n行\txing2\n银行\tyin2 hang2\n走\tzou3\n的\tde5\n跑\tpao3\n一\tyi1\n个\tge4\n绿\tlv4\n学\txue2\n吃\tchi1\n爱\tai4\n去\tqu4\n";
 
 fn lex() -> MandarinLexicon {
     let mut l = MandarinLexicon::new();
@@ -61,7 +61,8 @@ fn readings_by_longest_phrase_then_tone_sandhi() {
 fn pinyin_becomes_ipa_with_aspiration_said() {
     let all: Vec<String> = syls("跑不吃学绿的爱").iter().map(ipa).collect();
     // p aspirated, b unaspirated; ch aspirated before an apical vowel; xue = ɕ ɥ ɛ; lü; neutral de; ai
-    assert_eq!(all, ["pʰaʊ", "p˭u", "tʂʰɨ", "ɕɥɛ", "ly", "t˭ə", "aɪ"]);
+    // apical ʅ after ch; xue's glide sings inside the vowel (yɛ); 爱 starts with a glottal catch
+    assert_eq!(all, ["pʰaʊ", "p˭u", "tʂʰʅ", "ɕyɛ", "ly", "t˭ə", "ʔaɪ"]);
 }
 
 #[test]
@@ -100,7 +101,7 @@ fn pinyin_with_tones_is_mandarin_and_without_is_english() {
     let text: Vec<&str> = t.iter().map(|x| x.0.as_str()).collect();
     assert_eq!(text, ["nǐ", "hǎo", "xiè", "xie", "ni3", "hao3", "de5", "xī", "ān", "nǚ"]);
     let ipa: Vec<&str> = t.iter().map(|x| x.1.as_str()).collect();
-    assert_eq!(ipa, ["ni", "xaʊ", "ɕjɛ", "ɕjɛ", "ni", "xaʊ", "t˭ə", "ɕi", "an", "ny"]);
+    assert_eq!(ipa, ["ni", "xaʊ", "ɕiɛ", "ɕiɛ", "ni", "xaʊ", "t˭ə", "ɕi", "ʔan", "ny"]);
     // nǐhǎo is one word: third-tone sandhi sings nǐ rising (one bend); "ni3 hao3" are two words
     assert_eq!(t[0].2, tone_bends(2).len());
     assert_eq!(t[4].2, tone_bends(3).len());
@@ -109,4 +110,36 @@ fn pinyin_with_tones_is_mandarin_and_without_is_english() {
     // English: no tones, not pinyin; an accented word that isn't pinyin isn't re-entered midway
     let e: Vec<String> = typed("hello café it's").into_iter().map(|x| x.0).collect();
     assert_eq!(e, ["hel", "lo", "caf", "it's"]);
+}
+
+#[test]
+fn the_front_end_says_aspiration_length_and_nasalisation() {
+    let s = syls("跑的天");
+    assert_eq!(s[0].onset[0].vot, Some(0.09)); // aspirated: Mandarin's long aspiration
+    assert_eq!(s[1].onset[0].vot, None); // unaspirated
+    assert_eq!(s[1].breath, None); // neutral tones stay at full breath (measured: lighter was harder to recognise)
+    assert!(s[2].nasal_lead.is_some()); // tiān: nasalised before -n
+    assert_eq!(s[0].nasal_lead, None);
+}
+
+#[test]
+fn apical_vowels_follow_their_consonant() {
+    let n: Vec<String> = syls("四是").iter().map(|s| s.nucleus.ipa.clone()).collect();
+    assert_eq!(n, ["ɿ", "ʅ"]);
+}
+
+#[test]
+fn erhua_merges_into_the_syllable_before() {
+    let shown = |t: &str| syls(t).iter().map(|s| format!("{}={}", s.text, ipa(s))).collect::<Vec<_>>().join(" ");
+    // erhua: the syllable ends in ɻ, its -n gives way, a falling diphthong keeps its first vowel
+    assert_eq!(shown("一点儿"), "一=i 点儿=t˭iɛɻ");
+    assert_eq!(shown("块儿"), "块儿=kʰwaɻ");
+    assert_eq!(shown("哪儿"), "哪儿=naɻ");
+    assert_eq!(shown("一会儿"), "一=i 会儿=xweɻ");
+    // 儿 as a word's own syllable
+    assert_eq!(shown("女儿"), "女=ny 儿=ʔɝ");
+    assert_eq!(shown("儿子"), "儿=ʔɝ 子=ts˭ɿ");
+    // pinyin's r
+    let p: Vec<String> = typed("nǎr yìdiǎnr").into_iter().map(|x| x.1).collect();
+    assert_eq!(p, ["naɻ", "i", "t˭iɛɻ"]);
 }

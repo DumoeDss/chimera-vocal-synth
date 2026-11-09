@@ -60,8 +60,15 @@ impl MandarinLexicon {
     /// A run of Han characters → one numbered pinyin syllable per character ("" where unknown),
     /// by longest phrase match, then tone sandhi.
     pub fn read(&self, run: &str) -> Vec<String> {
+        self.read_with_source(run).into_iter().map(|(p, _)| p).collect()
+    }
+
+    /// [`read`](Self::read), with whether each reading came from a phrase (rather than the
+    /// character's own most common reading).
+    fn read_with_source(&self, run: &str) -> Vec<(String, bool)> {
         let cs: Vec<char> = run.chars().collect();
         let mut out: Vec<String> = Vec::with_capacity(cs.len());
+        let mut from_phrase: Vec<bool> = Vec::with_capacity(cs.len());
         let mut i = 0;
         while i < cs.len() {
             let mut took = false;
@@ -69,6 +76,7 @@ impl MandarinLexicon {
                 let w: String = cs[i..i + n].iter().collect();
                 if let Some(syls) = self.phrases.get(&w) {
                     out.extend(syls.iter().cloned());
+                    from_phrase.extend(std::iter::repeat_n(true, n));
                     i += n;
                     took = true;
                     break;
@@ -76,11 +84,12 @@ impl MandarinLexicon {
             }
             if !took {
                 out.push(self.chars.get(&cs[i]).cloned().unwrap_or_default());
+                from_phrase.push(false);
                 i += 1;
             }
         }
         sandhi(&cs, &mut out);
-        out
+        out.into_iter().zip(from_phrase).collect()
     }
 }
 
@@ -136,6 +145,13 @@ pub fn tone_bends(tone: u8) -> Vec<Bend> {
         _ => vec![],
     }
 }
+
+
+/// Fraction of a vowel nasalised before -n/-ng.
+const NASAL_LEAD: f64 = 0.4;
+
+/// Aspiration length of Mandarin's aspirated stops and affricates (s).
+const MANDARIN_VOT: f64 = 0.09;
 
 /// An initial → its sound and, for stops and affricates, its aspiration.
 fn initial(i: &str) -> Option<(&'static str, Option<bool>)> {
@@ -216,6 +232,12 @@ fn final_parts(f: &str) -> Option<(&'static [&'static str], &'static str, &'stat
 pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
     let t = tone(py);
     let body = py.trim_end_matches(|c: char| c.is_ascii_digit());
+    // erhua spelled in pinyin: a trailing r on any syllable but er itself (nǎr, diǎnr)
+    if body.len() > 1 && body.ends_with('r') && body != "er" {
+        let mut s = pinyin_syllable(&format!("{}{t}", &body[..body.len() - 1]), text)?;
+        rhotacize(&mut s);
+        return Some(s);
+    }
     let ini = ["zh", "ch", "sh"].into_iter().find(|i| body.starts_with(i)).or_else(|| {
         let c = &body[..body.chars().next()?.len_utf8()];
         (initial(c).is_some() || c == "y" || c == "w").then_some(c)
@@ -245,14 +267,42 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         _ => {}
     }
     let apical = matches!(ini, "z" | "c" | "s" | "zh" | "ch" | "sh" | "r") && fin == "i";
-    let (glide, mut nucleus, coda) = if apical { (&[][..], "ɨ", &[][..]) } else { final_parts(&fin)? };
+    // the apical vowels: the consonant's tongue held open (ɿ after z c s, ʅ after zh ch sh r)
+    let apical_vowel = if matches!(ini, "z" | "c" | "s") { "ɿ" } else { "ʅ" };
+    let (glide, mut nucleus, coda) = if apical { (&[][..], apical_vowel, &[][..]) } else { final_parts(&fin)? };
     // a neutral-tone syllable's e reduces (的 de, 了 le)
     if t == 5 && nucleus == "ɤ" {
         nucleus = "ə";
     }
+    // a medial glide belongs to the rhyme: glide + vowel as one rising diphthong, sung on the beat
+    // (the three-vowel finals iao, iou, uai, uei keep the glide as an onset)
+    let mut glide = glide;
+    let rising = match (glide, nucleus) {
+        (["j"], "a") => Some("ia"),
+        (["j"], "ɛ") => Some("iɛ"),
+        (["j"], "ɑ") => Some("iɑ"),
+        (["j"], "ʊ") => Some("iʊ"),
+        (["w"], "a") => Some("ua"),
+        (["w"], "o") => Some("uo"),
+        (["w"], "ɑ") => Some("uɑ"),
+        (["w"], "ə") => Some("uə"),
+        (["ɥ"], "ɛ") => Some("yɛ"),
+        _ => None,
+    };
+    if let Some(r) = rising {
+        nucleus = r;
+        glide = &[];
+    }
     let mut onset: Vec<Segment> = Vec::new();
+    // a syllable spelled with no initial (爱 ài, 安 ān, 饿 è; not y-/w-) starts with a soft glottal
+    // catch, which keeps it from running into the vowel before
+    if ini.is_empty() && !matches!(fin.as_str(), "n" | "ng" | "m" | "hm" | "hng") {
+        onset.push(Segment::new("ʔ"));
+    }
     if let Some((ipa, aspirated)) = initial(ini) {
-        onset.push(Segment { aspirated, ..Segment::new(ipa) });
+        // Mandarin's aspirated stops and affricates aspirate for ~80-100 ms, longer than English's
+        let vot = (aspirated == Some(true)).then_some(MANDARIN_VOT);
+        onset.push(Segment { aspirated, vot, ..Segment::new(ipa) });
     }
     onset.extend(glide.iter().map(|g| Segment::new(g)));
     Some(Syllable {
@@ -261,8 +311,26 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         nucleus: Segment::new(nucleus),
         coda: coda.iter().map(|c| Segment::new(c)).collect(),
         pitch: tone_bends(t),
+        // vowels before -n/-ng are nasalised. (Lighter neutral tones, breath 0.7 on 的 了, sounded
+        // more natural but made them harder to recognise in the scramble test, so they stay full.)
+        nasal_lead: (!coda.is_empty()).then_some(NASAL_LEAD),
         ..Default::default()
     })
+}
+
+/// 儿 after these is always erhua (哪儿 nǎr, 这儿, 那儿), whatever the lexicon says.
+const ERHUA_AFTER: &str = "哪这那";
+/// 儿 after these is its own syllable (女儿 nǚ'ér, 婴儿, 孤儿, 托儿所): words for people.
+const ER_SYLLABLE_AFTER: &str = "女婴孤幼男健宠胎孙侄托";
+
+/// Erhua: the syllable ends rhotic instead (一点儿 diǎnr, 哪儿 nǎr). A nasal coda gives way to
+/// the r, and a falling diphthong keeps its first vowel (块儿 kuàir → [kʰwaɻ]).
+fn rhotacize(s: &mut Syllable) {
+    if let Some((a, _)) = super::planner::diphthong_parts(&s.nucleus.ipa).filter(|_| !super::planner::is_rising(&s.nucleus.ipa)) {
+        s.nucleus = Segment::new(a);
+    }
+    s.coda = vec![Segment::new("ɻ")];
+    s.nasal_lead = None;
 }
 
 /// The Mandarin front end, over a loaded lexicon (without one it reads nothing).
@@ -274,7 +342,24 @@ impl FrontEnd for Mandarin<'_> {
     }
     fn word(&self, run: &str) -> Vec<Syllable> {
         let cs: Vec<char> = run.chars().collect();
-        self.0.read(run).iter().zip(&cs).filter_map(|(py, c)| pinyin_syllable(py, &c.to_string())).collect()
+        let mut out: Vec<Syllable> = Vec::new();
+        for (i, ((py, phrase), c)) in self.0.read_with_source(run).iter().zip(&cs).enumerate() {
+            // erhua: 儿 after another syllable is its rhotic ending (一会儿 er5, 块儿, 哪儿), unless it's
+            // a word's own syllable (女儿, 婴儿, or a phrase reading it with a tone): lyrics' 儿 is
+            // mostly erhua. The data marks 哪儿/这儿/那儿 toned and lacks 婴儿-type words, hence the lists.
+            let prev = if i > 0 { Some(cs[i - 1]) } else { None };
+            let erhua = *c == '儿'
+                && prev.is_some_and(|p| ERHUA_AFTER.contains(p) || (!ER_SYLLABLE_AFTER.contains(p) && (py == "er5" || !phrase)));
+            if erhua {
+                if let Some(prev) = out.last_mut() {
+                    rhotacize(prev);
+                    prev.text.push('儿');
+                    continue;
+                }
+            }
+            out.extend(pinyin_syllable(py, &c.to_string()));
+        }
+        out
     }
 }
 
@@ -331,7 +416,10 @@ const SYLLABLES: &[&str] = &[
 ];
 
 fn valid_syllable(base: &str) -> bool {
-    SYLLABLES.binary_search(&base).is_ok() && pinyin_syllable(&format!("{base}1"), "").is_some()
+    // a real syllable, or one with an erhua r (nar, dianr)
+    let real = |b: &str| SYLLABLES.binary_search(&b).is_ok();
+    let erhua = base.len() > 1 && base != "er" && base.strip_suffix('r').is_some_and(real);
+    (real(base) || erhua) && pinyin_syllable(&format!("{base}1"), "").is_some()
 }
 
 /// A word → (spelling, numbered pinyin) per syllable; None if it carries no tone or isn't pinyin.
