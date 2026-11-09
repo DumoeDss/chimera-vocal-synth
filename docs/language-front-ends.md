@@ -7,6 +7,7 @@ lyrics ──► router ──► FRONT END ──► syllables ──► BACK E
            (by script)  English: CMUdict         (IPA + aspiration     the planner, the airway,
                         Korean: Hangul rules      + pitch bends)        the voice: language-agnostic
                         Mandarin: pinyin lexicon
+                        Pinyin: typed tones
                         explicit syllables pass through
 ```
 
@@ -22,11 +23,24 @@ one exception: it is still the planner's default when a front end says nothing.
 | Latin | English | CMUdict (letter-to-sound until it loads) | `phonetics/english.rs`, `syllables.rs` |
 | Hangul | Korean | nothing: the block's letters are its sounds | `phonetics/korean.rs` |
 | Han | Mandarin | `public/data/mandarin.txt.gz` (206 KB, loaded when lyrics have Han characters) | `phonetics/mandarin.rs` |
+| Latin with tones | Mandarin as pinyin | nothing (checked against Mandarin's 411 syllables) | `phonetics/mandarin.rs` (`Pinyin`) |
 
 The router (`read_lyrics` in `syllables.rs`) sends each word to the front end whose script it is
-in, so a line can mix them: `我爱你，银行 hello 빵야`. It also handles what every language shares:
+in, so a line can mix them: `我爱你，银行 hello 빵야 wǒ ài nǐ`. It also handles what every language shares:
 melisma marks (`-`, `~`), phrase punctuation (ASCII and full-width `，。！？`) and word ends. Type
 lyrics in Sing mode, a melody file's `"lyrics"`, or a duet show's melody files.
+
+Pinyin and English share the Latin alphabet, so a front end may decline a word it scanned. Pinyin
+claims only a word that carries tones and parses fully into real syllables:
+- **Tone marks:** `nǐhǎo`, `xièxie` (an unmarked syllable inside a marked word is neutral).
+- **Tone numbers:** `ni3 hao3`, `de5` or `de0`.
+- **Splitting:** apostrophes split syllables (`Xī'ān`), and `ü` or `v` both work.
+- **Tone changes:** third-tone sandhi applies inside a word (`nǐhǎo` sings nǐ rising). Write 不 and 一
+  with the tone they're sung with (`bú`, `yí`), since pinyin alone can't tell 不 from 部.
+
+Words without tones are English. A declined word isn't re-entered midway, so `café` stays English.
+The one ambiguity: an accented English word that is also valid toned pinyin (`résumé`, *ré su mé*)
+reads as pinyin; type it unaccented.
 
 `chimera syllables "<lyrics>"` prints what the front ends wrote: the quickest way to check one.
 

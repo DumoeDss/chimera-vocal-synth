@@ -6,7 +6,7 @@ use chimera::phonetics::english::EnglishG2P;
 use chimera::phonetics::inventory::{Manner, phoneme};
 use chimera::phonetics::ipa::tokenize_ipa;
 use chimera::phonetics::korean::Korean;
-use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, tone_bends};
+use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin, tone_bends};
 use chimera::phonetics::syllables::{English, read_lyrics};
 use chimera::phonetics::{Edge, Syllable};
 
@@ -86,4 +86,27 @@ fn a_mixed_line_routes_each_word_to_its_front_end() {
     // no lexicon loaded: Han reads as nothing, the rest is unaffected
     let empty = MandarinLexicon::new();
     assert_eq!(read_lyrics("我 you", &[&English(&g), &Mandarin(&empty)]).len(), 1);
+}
+
+fn typed(text: &str) -> Vec<(String, String, usize)> {
+    let mut g = EnglishG2P::new();
+    g.load_dict("hello\tHH AH0 L OW1\ncaf\tK AE1 F\nit's\tIH1 T S\n");
+    read_lyrics(text, &[&Pinyin, &English(&g), &Korean]).iter().map(|s| (s.text.clone(), ipa(s), s.pitch.len())).collect()
+}
+
+#[test]
+fn pinyin_with_tones_is_mandarin_and_without_is_english() {
+    let t = typed("nǐhǎo xièxie ni3 hao3 de5 Xī'ān nǚ");
+    let text: Vec<&str> = t.iter().map(|x| x.0.as_str()).collect();
+    assert_eq!(text, ["nǐ", "hǎo", "xiè", "xie", "ni3", "hao3", "de5", "xī", "ān", "nǚ"]);
+    let ipa: Vec<&str> = t.iter().map(|x| x.1.as_str()).collect();
+    assert_eq!(ipa, ["ni", "xaʊ", "ɕjɛ", "ɕjɛ", "ni", "xaʊ", "t˭ə", "ɕi", "an", "ny"]);
+    // nǐhǎo is one word: third-tone sandhi sings nǐ rising (one bend); "ni3 hao3" are two words
+    assert_eq!(t[0].2, tone_bends(2).len());
+    assert_eq!(t[4].2, tone_bends(3).len());
+    // the unmarked syllable of a marked word is neutral: no bend
+    assert_eq!(t[3].2, 0);
+    // English: no tones, not pinyin; an accented word that isn't pinyin isn't re-entered midway
+    let e: Vec<String> = typed("hello café it's").into_iter().map(|x| x.0).collect();
+    assert_eq!(e, ["hel", "lo", "caf", "it's"]);
 }

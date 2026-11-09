@@ -13,7 +13,7 @@ use chimera::phonetics::planner::{self, PhraseInput, PlanOptions};
 use chimera::phonetics::sing::{self, MelismaOptions, NoteOnOptions, SongOptions, SungNote};
 use chimera::phonetics::english::EnglishG2P;
 use chimera::phonetics::korean::Korean;
-use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon};
+use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin};
 use chimera::phonetics::syllables::{English, read_lyrics};
 use chimera::phonetics::{Segment, Syllable, ipa, songs, vowel_data};
 use chimera::voice::human_airway::HumanAirway;
@@ -133,8 +133,8 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
             st.mandarin.load(&arg::<String>(req, "text")?);
             Ok(json!(true))
         }
-        // every built-in front end: English, Korean, and Mandarin once its lexicon is loaded
-        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&English(&st.g2p), &Korean, &Mandarin(&st.mandarin)])),
+        // every built-in front end: pinyin, English, Korean, and Mandarin once its lexicon is loaded
+        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&Pinyin, &English(&st.g2p), &Korean, &Mandarin(&st.mandarin)])),
         // ---------------------------------------------------------------- creatures
         "creaturePreview" => {
             let id: String = arg(req, "id")?;

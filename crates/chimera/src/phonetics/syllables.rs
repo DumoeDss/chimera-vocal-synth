@@ -12,6 +12,7 @@
 use crate::anatomy::human::BodyMix;
 use super::english::js_is_space;
 use super::korean::Korean;
+use super::mandarin::Pinyin;
 use super::planner::is_vowel;
 use super::{Segment, Syllable};
 use serde::{Deserialize, Serialize};
@@ -164,6 +165,12 @@ pub trait FrontEnd {
     fn continues(&self, c: char) -> bool {
         self.starts(c)
     }
+    /// Whether this front end reads the whole `word` it scanned (default: yes). A front end that
+    /// shares a script with another says no to what isn't its own, and the next one gets the word
+    /// (pinyin and English share the Latin alphabet).
+    fn claims(&self, _word: &str) -> bool {
+        true
+    }
     /// One word → its syllables (the router marks the last as the word's end).
     fn word(&self, word: &str) -> Vec<Syllable>;
 }
@@ -213,13 +220,26 @@ fn lyric_tokens(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Token> {
     let mut i = 0;
     while i < s.len() {
         let c = s[i];
-        if let Some(k) = front_ends.iter().position(|f| f.starts(c)) {
-            let start = i;
-            i += 1;
-            while i < s.len() && front_ends[k].continues(s[i]) {
-                i += 1;
+        // the first front end that starts here and claims the word it scans. A longer word that an
+        // earlier front end scanned and declined isn't re-entered midway: "café" is English's
+        // "caf" (the é dropped, as before), not "caf" and a pinyin "é"
+        let mut declined = i;
+        let mut word = None;
+        for (k, f) in front_ends.iter().enumerate().filter(|(_, f)| f.starts(c)) {
+            let mut j = i + 1;
+            while j < s.len() && f.continues(s[j]) {
+                j += 1;
             }
-            out.push(Token::Word(k, s[start..i].iter().collect()));
+            let w: String = s[i..j].iter().collect();
+            if f.claims(&w) {
+                word = Some((k, j, w));
+                break;
+            }
+            declined = declined.max(j);
+        }
+        if let Some((k, j, w)) = word {
+            out.push(Token::Word(k, w));
+            i = j.max(declined);
             continue;
         }
         let melisma = (c == '~' || c == '-') && (i == 0 || js_is_space(s[i - 1])) && (i + 1 == s.len() || js_is_space(s[i + 1]));
@@ -261,7 +281,8 @@ pub fn read_lyrics(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Syllable> {
 }
 
 /// Lyrics text → syllables through the built-in front ends that need no data beyond the English
-/// dictionary: English (`g2p`) and Korean.
+/// dictionary: pinyin (only words with tones; before English, which shares its alphabet), English
+/// (`g2p`) and Korean.
 pub fn lyrics_to_syllables(text: &str, g2p: &impl WordSource) -> Vec<Syllable> {
-    read_lyrics(text, &[&English(g2p), &Korean])
+    read_lyrics(text, &[&Pinyin, &English(g2p), &Korean])
 }

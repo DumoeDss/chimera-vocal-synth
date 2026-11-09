@@ -12,6 +12,10 @@
 //!   Mandarin contrasts: b d g z zh j are unaspirated (p˭ t˭ k˭ ts˭ tʂ˭ tɕ˭), p t k c ch q aspirated.
 //! - Tones → pitch bends ([`tone_bends`]): the melody stays as written, the tone colours the
 //!   note's start or end.
+//!
+//! [`Pinyin`] reads Mandarin typed as pinyin instead, with no lexicon: a Latin word that carries
+//! tones (marks, "nǐhǎo", or numbers, "ni3 hao3") and parses as pinyin. Toneless words stay
+//! English.
 
 use super::syllables::FrontEnd;
 use super::{Bend, Edge, Segment, Syllable};
@@ -92,6 +96,7 @@ fn set_tone(py: &mut String, t: u8) {
 
 fn sandhi(cs: &[char], py: &mut [String]) {
     let n = py.len();
+    // 不 and 一 by the character: pinyin alone can't tell 不 bu4 from 部 bu4
     for i in 0..n {
         let next = if i + 1 < n { Some(tone(&py[i + 1])) } else { None };
         match (cs[i], next) {
@@ -101,7 +106,12 @@ fn sandhi(cs: &[char], py: &mut [String]) {
             _ => {}
         }
     }
-    // a run of third tones: all but the last become second
+    third_tones(py);
+}
+
+/// A run of third tones: all but the last become second (你好 ni2 hao3).
+fn third_tones(py: &mut [String]) {
+    let n = py.len();
     let mut i = 0;
     while i < n {
         let mut j = i;
@@ -265,5 +275,151 @@ impl FrontEnd for Mandarin<'_> {
     fn word(&self, run: &str) -> Vec<Syllable> {
         let cs: Vec<char> = run.chars().collect();
         self.0.read(run).iter().zip(&cs).filter_map(|(py, c)| pinyin_syllable(py, &c.to_string())).collect()
+    }
+}
+
+/// Mandarin typed as pinyin: a Latin word that carries tones, as marks ("nǐhǎo", "xièxie") or numbers
+/// ("ni3", "hao3", "de5"), and parses fully as pinyin. Syllables split at numbers and apostrophes
+/// ("xi'an"), otherwise by the longest valid syllable; an unmarked syllable in a marked word is
+/// neutral ("xièxie" xie4 xie5). Third-tone sandhi applies inside a word; 不 and 一 are written with
+/// the tone they're sung with (bú, yí), since pinyin alone can't tell 不 from 部. A word without tones
+/// isn't claimed, so English reads it.
+pub struct Pinyin;
+
+/// A tone-marked vowel → (its letter, the tone).
+fn tone_mark(c: char) -> Option<(char, u8)> {
+    const MARKS: [(&str, char); 6] = [("āáǎà", 'a'), ("ēéěè", 'e'), ("īíǐì", 'i'), ("ōóǒò", 'o'), ("ūúǔù", 'u'), ("ǖǘǚǜ", 'v')];
+    MARKS.iter().find_map(|(m, b)| m.chars().position(|x| x == c).map(|k| (*b, k as u8 + 1)))
+}
+
+/// Every Mandarin syllable (toneless pinyin, ü as v), sorted: the readings in the lexicon
+/// (public/data/mandarin.txt.gz), so typed pinyin is checked against real syllables (no "fe" in café).
+#[rustfmt::skip]
+const SYLLABLES: &[&str] = &[
+    "a", "ai", "an", "ang", "ao", "ba", "bai", "ban", "bang", "bao", "bei", "ben", "beng", "bi",
+    "bian", "biao", "bie", "bin", "bing", "bo", "bu", "ca", "cai", "can", "cang", "cao", "ce",
+    "cen", "ceng", "cha", "chai", "chan", "chang", "chao", "che", "chen", "cheng", "chi", "chong",
+    "chou", "chu", "chua", "chuai", "chuan", "chuang", "chui", "chun", "chuo", "ci", "cong", "cou",
+    "cu", "cuan", "cui", "cun", "cuo", "da", "dai", "dan", "dang", "dao", "de", "dei", "den",
+    "deng", "di", "dia", "dian", "diao", "die", "ding", "diu", "dong", "dou", "du", "duan", "dui",
+    "dun", "duo", "e", "ei", "en", "eng", "er", "fa", "fan", "fang", "fei", "fen", "feng", "fiao",
+    "fo", "fou", "fu", "ga", "gai", "gan", "gang", "gao", "ge", "gei", "gen", "geng", "gong", "gou",
+    "gu", "gua", "guai", "guan", "guang", "gui", "gun", "guo", "ha", "hai", "han", "hang", "hao",
+    "he", "hei", "hen", "heng", "hong", "hou", "hu", "hua", "huai", "huan", "huang", "hui", "hun",
+    "huo", "ji", "jia", "jian", "jiang", "jiao", "jie", "jin", "jing", "jiong", "jiu", "ju", "juan",
+    "jue", "jun", "ka", "kai", "kan", "kang", "kao", "ke", "ken", "keng", "kong", "kou", "ku",
+    "kua", "kuai", "kuan", "kuang", "kui", "kun", "kuo", "la", "lai", "lan", "lang", "lao", "le",
+    "lei", "leng", "li", "lia", "lian", "liang", "liao", "lie", "lin", "ling", "liu", "long", "lou",
+    "lu", "luan", "lun", "luo", "lv", "lve", "m", "ma", "mai", "man", "mang", "mao", "me", "mei",
+    "men", "meng", "mi", "mian", "miao", "mie", "min", "ming", "miu", "mo", "mou", "mu", "n", "na",
+    "nai", "nan", "nang", "nao", "ne", "nei", "nen", "neng", "ni", "nian", "niang", "niao", "nie",
+    "nin", "ning", "niu", "nong", "nou", "nu", "nuan", "nun", "nuo", "nv", "nve", "o", "ou", "pa",
+    "pai", "pan", "pang", "pao", "pei", "pen", "peng", "pi", "pian", "piao", "pie", "pin", "ping",
+    "po", "pou", "pu", "qi", "qia", "qian", "qiang", "qiao", "qie", "qin", "qing", "qiong", "qiu",
+    "qu", "quan", "que", "qun", "ran", "rang", "rao", "re", "ren", "reng", "ri", "rong", "rou",
+    "ru", "rua", "ruan", "rui", "run", "ruo", "sa", "sai", "san", "sang", "sao", "se", "sen",
+    "seng", "sha", "shai", "shan", "shang", "shao", "she", "shei", "shen", "sheng", "shi", "shou",
+    "shu", "shua", "shuai", "shuan", "shuang", "shui", "shun", "shuo", "si", "song", "sou", "su",
+    "suan", "sui", "sun", "suo", "ta", "tai", "tan", "tang", "tao", "te", "teng", "ti", "tian",
+    "tiao", "tie", "ting", "tong", "tou", "tu", "tuan", "tui", "tun", "tuo", "wa", "wai",
+    "wan", "wang", "wei", "wen", "weng", "wo", "wu", "xi", "xia", "xian", "xiang", "xiao", "xie",
+    "xin", "xing", "xiong", "xiu", "xu", "xuan", "xue", "xun", "ya", "yan", "yang", "yao", "ye",
+    "yi", "yin", "ying", "yo", "yong", "you", "yu", "yuan", "yue", "yun", "za", "zai", "zan",
+    "zang", "zao", "ze", "zei", "zen", "zeng", "zha", "zhai", "zhan", "zhang", "zhao", "zhe",
+    "zhen", "zheng", "zhi", "zhong", "zhou", "zhu", "zhua", "zhuai", "zhuan", "zhuang", "zhui",
+    "zhun", "zhuo", "zi", "zong", "zou", "zu", "zuan", "zui", "zun", "zuo",
+];
+
+fn valid_syllable(base: &str) -> bool {
+    SYLLABLES.binary_search(&base).is_ok() && pinyin_syllable(&format!("{base}1"), "").is_some()
+}
+
+/// A word → (spelling, numbered pinyin) per syllable; None if it carries no tone or isn't pinyin.
+fn parse_pinyin(word: &str) -> Option<Vec<(String, String)>> {
+    // pieces end at a tone number or an apostrophe; each letter keeps its spelling and its mark
+    let mut pieces: Vec<(Vec<(char, char, u8)>, Option<u8>)> = vec![(Vec::new(), None)];
+    let mut toned = false;
+    for c in word.chars().flat_map(char::to_lowercase) {
+        let last = pieces.last_mut().unwrap();
+        if let Some(d) = c.to_digit(10) {
+            if d > 5 || last.0.is_empty() {
+                return None;
+            }
+            last.1 = Some(if d == 0 { 5 } else { d as u8 });
+            toned = true;
+            pieces.push((Vec::new(), None));
+        } else if c == '\'' {
+            pieces.push((Vec::new(), None));
+        } else if let Some((b, t)) = tone_mark(c) {
+            last.0.push((c, b, t));
+            toned = true;
+        } else if c == 'ü' || c.is_ascii_lowercase() {
+            last.0.push((c, if c == 'ü' { 'v' } else { c }, 0));
+        } else {
+            return None;
+        }
+    }
+    if !toned {
+        return None;
+    }
+    let mut out = Vec::new();
+    for (letters, digit) in pieces.into_iter().filter(|p| !p.0.is_empty()) {
+        let base: String = letters.iter().map(|l| l.1).collect();
+        let cuts = split_syllables(&base)?;
+        let mut start = 0;
+        for (n, &end) in cuts.iter().enumerate() {
+            let span = &letters[start..end];
+            let marks: Vec<u8> = span.iter().map(|l| l.2).filter(|&t| t > 0).collect();
+            if marks.len() > 1 {
+                return None;
+            }
+            let tone = marks.first().copied().or(if n + 1 == cuts.len() { digit } else { None }).unwrap_or(5);
+            let mut text: String = span.iter().map(|l| l.0).collect();
+            if n + 1 == cuts.len() && digit.is_some() && marks.is_empty() {
+                text.push(char::from(b'0' + tone));
+            }
+            out.push((text, format!("{}{tone}", &base[start..end])));
+            start = end;
+        }
+    }
+    Some(out)
+}
+
+/// The longest valid syllable first, backing off when the rest can't be split.
+fn split_syllables(base: &str) -> Option<Vec<usize>> {
+    fn go(base: &str, at: usize, out: &mut Vec<usize>) -> bool {
+        if at == base.len() {
+            return true;
+        }
+        for end in (at + 1..=base.len().min(at + 6)).rev() {
+            if valid_syllable(&base[at..end]) {
+                out.push(end);
+                if go(base, end, out) {
+                    return true;
+                }
+                out.pop();
+            }
+        }
+        false
+    }
+    let mut out = Vec::new();
+    go(base, 0, &mut out).then_some(out)
+}
+
+impl FrontEnd for Pinyin {
+    fn starts(&self, c: char) -> bool {
+        c.is_ascii_alphabetic() || c.to_lowercase().any(|l| tone_mark(l).is_some() || l == 'ü')
+    }
+    fn continues(&self, c: char) -> bool {
+        self.starts(c) || c.is_ascii_digit() || c == '\''
+    }
+    fn claims(&self, word: &str) -> bool {
+        parse_pinyin(word).is_some()
+    }
+    fn word(&self, word: &str) -> Vec<Syllable> {
+        let Some(sy) = parse_pinyin(word) else { return Vec::new() };
+        let mut py: Vec<String> = sy.iter().map(|s| s.1.clone()).collect();
+        third_tones(&mut py);
+        sy.iter().zip(&py).filter_map(|((text, _), p)| pinyin_syllable(p, text)).collect()
     }
 }
