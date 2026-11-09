@@ -4,8 +4,10 @@
 //! neutralise to seven sounds, obstruents nasalise before nasals (국물 → 궁물), ㄴ/ㄹ meet as [ll],
 //! ㅎ aspirates its neighbour (좋다 → 조타), and obstruents tense after an obstruent coda.
 //!
-//! The engine has no tense (fortis) stops, so tense ㄲ ㄸ ㅃ ㅉ sing as unaspirated (voiced) stops,
-//! and lax and aspirated stops both take the planner's aspiration. ㅅ before [i] or [j] is [ʃ].
+//! Stops say their own aspiration (Segment::aspirated): aspirated ㅋ ㅌ ㅍ ㅊ are aspirated, and
+//! tense ㄲ ㄸ ㅃ ㅉ are voiceless and unaspirated (the engine has no stiff "fortis" phonation yet).
+//! Lax stops keep the planner's default: aspirated word-initially, voiced between voiced sounds.
+//! ㅈ ㅊ ㅉ are alveolo-palatal [tɕ], and ㅅ ㅆ before [i] or [j] are [ɕ].
 
 use super::syllables::FrontEnd;
 use super::{Segment, Syllable};
@@ -154,28 +156,33 @@ fn join(a: &mut Block, b: &mut Block) {
     }
 }
 
-fn onset_ipa(o: char, voiced_before: bool, front: bool, after_l: bool) -> &'static str {
+/// An initial's sound, and its aspiration when the letter decides it (None: the planner's default).
+fn onset_ipa(o: char, voiced_before: bool, front: bool, after_l: bool) -> (&'static str, Option<bool>) {
     match o {
-        'ㄱ' if voiced_before => "g",
-        'ㄱ' | 'ㅋ' => "k",
-        'ㄲ' => "g",
-        'ㄷ' if voiced_before => "d",
-        'ㄷ' | 'ㅌ' => "t",
-        'ㄸ' => "d",
-        'ㅂ' if voiced_before => "b",
-        'ㅂ' | 'ㅍ' => "p",
-        'ㅃ' => "b",
-        'ㅈ' if voiced_before => "dʒ",
-        'ㅈ' | 'ㅊ' => "tʃ",
-        'ㅉ' => "dʒ",
-        'ㅅ' | 'ㅆ' if front => "ʃ",
-        'ㅅ' | 'ㅆ' => "s",
-        'ㅎ' if voiced_before => "ɦ",
-        'ㅎ' => "h",
-        'ㄴ' => "n",
-        'ㅁ' => "m",
-        'ㄹ' if after_l => "l",
-        'ㄹ' => "ɾ",
+        'ㄱ' if voiced_before => ("g", None),
+        'ㄱ' => ("k", None),
+        'ㅋ' => ("k", Some(true)),
+        'ㄲ' => ("k", Some(false)),
+        'ㄷ' if voiced_before => ("d", None),
+        'ㄷ' => ("t", None),
+        'ㅌ' => ("t", Some(true)),
+        'ㄸ' => ("t", Some(false)),
+        'ㅂ' if voiced_before => ("b", None),
+        'ㅂ' => ("p", None),
+        'ㅍ' => ("p", Some(true)),
+        'ㅃ' => ("p", Some(false)),
+        'ㅈ' if voiced_before => ("dʑ", None),
+        'ㅈ' => ("tɕ", None),
+        'ㅊ' => ("tɕ", Some(true)),
+        'ㅉ' => ("tɕ", Some(false)),
+        'ㅅ' | 'ㅆ' if front => ("ɕ", None),
+        'ㅅ' | 'ㅆ' => ("s", None),
+        'ㅎ' if voiced_before => ("ɦ", None),
+        'ㅎ' => ("h", None),
+        'ㄴ' => ("n", None),
+        'ㅁ' => ("m", None),
+        'ㄹ' if after_l => ("l", None),
+        'ㄹ' => ("ɾ", None),
         _ => unreachable!("not an initial: {o}"),
     }
 }
@@ -208,7 +215,14 @@ pub fn word_syllables(word: &str) -> Vec<Syllable> {
         let prev_coda = if i > 0 { blocks[i - 1].coda.last().copied() } else { None };
         let voiced_before = i > 0 && prev_coda.is_none_or(|c| matches!(c, 'ㄴ' | 'ㄹ' | 'ㅁ' | 'ㅇ'));
         let front = b.vowel == "i" && b.glide != "w" || b.glide == "j";
-        let mut onset: Vec<Segment> = b.onset.map(|o| Segment::new(onset_ipa(o, voiced_before, front, prev_coda == Some('ㄹ')))).into_iter().collect();
+        let mut onset: Vec<Segment> = b
+            .onset
+            .map(|o| {
+                let (ipa, aspirated) = onset_ipa(o, voiced_before, front, prev_coda == Some('ㄹ'));
+                Segment { aspirated, ..Segment::new(ipa) }
+            })
+            .into_iter()
+            .collect();
         // ㅢ after a consonant is plain [i] (희 → 히)
         if !b.glide.is_empty() && !(b.glide == "ɰ" && b.onset.is_some()) {
             onset.push(Segment::new(b.glide));
