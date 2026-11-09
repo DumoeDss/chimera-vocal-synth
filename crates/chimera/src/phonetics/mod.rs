@@ -40,6 +40,9 @@ pub struct Segment {
     /// before a vowel, not after /s/)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aspirated: Option<bool>,
+    /// how long an aspirated stop or affricate's aspiration lasts (s, voice onset time); None: 50 ms
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vot: Option<f64>,
 }
 
 impl Segment {
@@ -102,6 +105,14 @@ pub struct Syllable {
     /// accent, a scoop); none: the note's pitch as written
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pitch: Vec<Bend>,
+    /// breath (lung drive) while the note sounds, relative to the phrase's (a light neutral-tone
+    /// syllable); None: the phrase's
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub breath: Option<f64>,
+    /// nasalise this fraction of the vowel before a nasal coda (at most 0.25 s), as Mandarin does;
+    /// None: the song's SongOptions::nasal_lead
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nasal_lead: Option<f64>,
 }
 
 /// Which end of its sung vowel a pitch bend sits at.

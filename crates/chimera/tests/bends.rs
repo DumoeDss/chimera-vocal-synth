@@ -52,3 +52,13 @@ fn nasal_lead_nasalises_only_before_a_nasal_coda() {
     assert!(nv[0].targets.get(ArticKey::Velum).unwrap() > 0.0);
     assert!(nv[0].t0 > 0.5 && nv[0].t1 < 0.5 + 2.0);
 }
+
+#[test]
+fn a_syllable_can_ask_for_its_own_breath() {
+    let one = |breath| plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: Syllable { breath, ..syl("l", "a", &[], vec![]) } }], &opts(None));
+    assert!(labelled(&one(None).gestures, "syllable breath").is_empty());
+    let p = one(Some(0.7));
+    let b = labelled(&p.gestures, "syllable breath");
+    assert_eq!(b.len(), 1);
+    assert_eq!(b[0].targets.get(ControlKey::BREATH), Some(0.7));
+}

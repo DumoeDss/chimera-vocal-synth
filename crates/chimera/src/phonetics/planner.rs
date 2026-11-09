@@ -52,8 +52,24 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
         "eɪ" => &["e", "i"],
         "oʊ" => &["o", "u"],
         "ɚ" => &["ɝ"],
+        // rising diphthongs: a short close glide into the main vowel (Mandarin's medials: 话 ua,
+        // 天 iɛ, 学 yɛ), written as one nucleus so the glide sings on the beat, inside the note
+        "ia" => &["i", "a"],
+        "iɛ" => &["i", "ɛ"],
+        "iɑ" => &["i", "ɑ"],
+        "iʊ" => &["i", "ʊ"],
+        "ua" => &["u", "a"],
+        "uo" => &["u", "o"],
+        "uɑ" => &["u", "ɑ"],
+        "uə" => &["u", "ə"],
+        "yɛ" => &["y", "ɛ"],
         _ => return None,
     })
+}
+
+/// A rising diphthong: its first part is a short glide and its second the vowel that holds.
+pub fn is_rising(ipa: &str) -> bool {
+    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ")
 }
 
 /// The two vowel targets of a diphthong ("aɪ" → ("a", "ɪ")), or None.
@@ -171,6 +187,7 @@ struct Seg<'a> {
     vowel: Option<ArticPatch>,
     glide_from: bool,
     aspirated: Option<bool>,
+    vot: Option<f64>,
 }
 
 #[derive(Clone, Copy)]
@@ -196,11 +213,12 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
         if let Some(parts) = expand(&s.ipa) {
             let base = durs[si];
             for (i, p) in parts.iter().enumerate() {
-                let dur = if parts.len() > 1 { base * (if i == 0 { 0.55 } else { 0.45 }) } else { base };
-                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None });
+                let first = if is_rising(&s.ipa) { 0.3 } else { 0.55 };
+                let dur = if parts.len() > 1 { base * (if i == 0 { first } else { 1.0 - first }) } else { base };
+                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, vot: None });
             }
         } else {
-            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated });
+            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, vot: s.vot });
         }
     }
     for s in segs.iter_mut() {
@@ -312,7 +330,7 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
                 // as the front end says; by default English's rule: aspirated when syllable-initial
                 // before a vowel and not after /s/
                 let aspirated = s.aspirated.unwrap_or_else(|| next_vowel && !prev_seg.is_some_and(|p| p.ipa == "s"));
-                let vot = if aspirated { 0.05 / rate } else { 0.012 };
+                let vot = if aspirated { s.vot.unwrap_or(0.05) / rate } else { 0.012 };
                 gestures.push(Gesture::new(t0 + 0.25 * dur, t1 + vot * 0.4, 0.035, if aspirated { 0.045 } else { 0.02 }, 6.0, one(ControlKey::ABDUCTION, if aspirated { 0.36 } else { 0.22 })).label("aspiration"));
             } else {
                 gestures.push(Gesture::new(t0 - 0.015, t1 + 0.005, 0.03, 0.03, 6.0, one(ControlKey::ABDUCTION, 0.3)).label("voiceless"));

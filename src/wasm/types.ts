@@ -157,6 +157,8 @@ export interface Segment {
   wordEnd?: boolean;
   /** a voiceless stop or affricate's aspiration as its front end decides it (unset: English's rule) */
   aspirated?: boolean;
+  /** an aspirated stop or affricate's aspiration length (s); unset: 50 ms */
+  vot?: number;
 }
 
 export interface PlannedSegment {
@@ -191,6 +193,10 @@ export interface Syllable {
   phraseEnd: boolean;
   /** pitch bends inside the sung note, written by the syllable's front end (a tone, an accent) */
   pitch?: Bend[];
+  /** breath while the note sounds, relative to the phrase's (unset: the phrase's) */
+  breath?: number;
+  /** nasalise this fraction of the vowel before a nasal coda (unset: the song's nasalLead) */
+  nasalLead?: number;
 }
 
 /** A bend of the pitch inside a sung note: `st` semitones, at its vowel's start or end, over `len` of the vowel (at most `max` s). */

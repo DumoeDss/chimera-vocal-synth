@@ -13,7 +13,7 @@
 
 use super::inventory::phoneme;
 use crate::anatomy::human::{ArticKey, BodyMix};
-use super::planner::{PlanOptions, diphthong_parts, plan_utterance};
+use super::planner::{PlanOptions, diphthong_parts, is_rising, plan_utterance};
 use super::{Bend, Edge, Intonation, Plan, PlannedSegment, Segment, Syllable};
 use crate::control::score::{ControlKey, Gesture, Targets};
 use crate::math::{js_max, js_min};
@@ -28,7 +28,7 @@ fn cdur(ipa: &str, body: BodyMix, k: f64) -> f64 {
 }
 
 fn consonants(segs: &[Segment], body: BodyMix, k: f64) -> Vec<Segment> {
-    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(cdur(&c.ipa, body, k)), aspirated: c.aspirated, ..Default::default() }).collect()
+    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(cdur(&c.ipa, body, k)), aspirated: c.aspirated, vot: c.vot, ..Default::default() }).collect()
 }
 
 /// Sung consonants at their note's pitch: an onset consonant moves the pitch to the new note
@@ -40,6 +40,9 @@ fn consonants_at(segs: &[Segment], body: BodyMix, k: f64, hz: f64) -> Vec<Segmen
     }
     out
 }
+
+/// a rising diphthong's glide lasts a quarter of its vowel, at most this long (s)
+const RISING_GLIDE: f64 = 0.12;
 
 /// a sung vowel keeps at least this long when a short note squeezes its consonants (s)
 const MIN_VOWEL: f64 = 0.05;
@@ -146,7 +149,8 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         let mut vowel_spans: Vec<(f64, f64)> = Vec::new();
         // (note, vowel start, vowel end) of syllables with bends, and of vowels before a nasal coda
         let mut bend_spans: Vec<(usize, f64, f64)> = Vec::new();
-        let mut nasal_spans: Vec<(f64, f64)> = Vec::new();
+        let mut nasal_spans: Vec<(f64, f64, f64)> = Vec::new();
+        let mut breath_spans: Vec<(f64, f64, f64)> = Vec::new();
         // each note's onset and coda consonants, at the note's pitch (a coda at the pitch of the
         // note whose syllable it ends; a melisma has neither)
         let hz_of = |k: usize| midi_to_hz(notes[k].midi);
@@ -176,18 +180,33 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let vdur = js_max(0.02, note_end - times[k] - total(&coda));
             segs.extend(onset);
             let parts = diphthong_parts(&n.syl.nucleus.ipa);
+            let rising = is_rising(&n.syl.nucleus.ipa);
             match parts {
-                Some((a, b)) if !next_melisma => {
-                    segs.push(Segment { ipa: a.to_string(), dur: Some(vdur * 0.8), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None });
-                    segs.push(Segment { ipa: b.to_string(), dur: Some(vdur * 0.2), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None });
+                // a rising diphthong: the glide on the beat, short, then the vowel holds
+                Some((a, b)) if rising && !melisma(&n.syl) => {
+                    let g = js_min(0.25 * vdur, RISING_GLIDE);
+                    segs.push(Segment { ipa: a.to_string(), dur: Some(g), f0: Some(hz), stress: Some(1), ..Default::default() });
+                    segs.push(Segment { ipa: b.to_string(), dur: Some(vdur - g), f0: Some(hz), stress: Some(1), ..Default::default() });
+                }
+                Some((a, b)) if !next_melisma && !rising => {
+                    segs.push(Segment { ipa: a.to_string(), dur: Some(vdur * 0.8), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
+                    segs.push(Segment { ipa: b.to_string(), dur: Some(vdur * 0.2), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
                 }
                 _ => {
-                    let ipa = parts.map_or(n.syl.nucleus.ipa.clone(), |p| p.0.to_string());
-                    segs.push(Segment { ipa, dur: Some(vdur), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None });
+                    // a held vowel: a falling diphthong holds its first part, a rising one its second
+                    let ipa = parts.map_or(n.syl.nucleus.ipa.clone(), |p| if rising { p.1 } else { p.0 }.to_string());
+                    segs.push(Segment { ipa, dur: Some(vdur), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
                 }
             }
             if coda.first().is_some_and(|c| matches!(c.ipa.as_str(), "m" | "n" | "ŋ")) {
-                nasal_spans.push((times[k], times[k] + vdur));
+                // the syllable whose coda this is decides (a melisma's coda is its parent's)
+                let lead = last_of_chain(notes, k).nasal_lead.or(o.nasal_lead).unwrap_or(0.0);
+                if lead > 0.0 {
+                    nasal_spans.push((times[k], times[k] + vdur, lead));
+                }
+            }
+            if let Some(b) = last_of_chain(notes, k).breath {
+                breath_spans.push((times[k], times[k] + vdur, b));
             }
             segs.extend(coda);
             vowel_spans.push((times[k], times[k] + vdur));
@@ -204,12 +223,13 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             for &(k, a, b) in &bend_spans {
                 bend_gestures(&notes[k].syl.pitch, hz_of(k), a, b, &mut gestures);
             }
-            let lead = o.nasal_lead.unwrap_or(0.0);
-            if lead > 0.0 {
-                for &(a, b) in &nasal_spans {
-                    let t0 = b - js_min(lead * (b - a), 0.25);
-                    gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 4.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
-                }
+            for &(a, b, lead) in &nasal_spans {
+                let t0 = b - js_min(lead * (b - a), 0.25);
+                gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 4.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
+            }
+            // a syllable's own breath, over the phrase's (strength 1): it wins while the note sounds
+            for &(a, b, level) in &breath_spans {
+                gestures.push(Gesture::new(a - 0.02, b, 0.05, 0.05, 8.0, Targets::default().with(ControlKey::BREATH, level)).label("syllable breath"));
             }
             for (a, b) in vowel_spans {
                 if b - a > 0.3 {
@@ -266,7 +286,11 @@ pub fn plan_note_on(syl: &Syllable, midi: f64, o: &NoteOnOptions) -> Vec<Gesture
     }
     segs.extend(consonants(&syl.onset, o.body, 0.7));
     let parts = diphthong_parts(&syl.nucleus.ipa);
-    segs.push(Segment { ipa: parts.map_or(syl.nucleus.ipa.clone(), |p| p.0.to_string()), dur: Some(HOLD), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None });
+    let rising = is_rising(&syl.nucleus.ipa);
+    if let (Some((a, _)), true) = (parts, rising) {
+        segs.push(Segment { ipa: a.to_string(), dur: Some(RISING_GLIDE * 0.6), f0: Some(hz), stress: Some(1), ..Default::default() });
+    }
+    segs.push(Segment { ipa: parts.map_or(syl.nucleus.ipa.clone(), |p| if rising { p.1 } else { p.0 }.to_string()), dur: Some(HOLD), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
     let plan = plan_utterance(&segs, &PlanOptions { body: o.body, t0: LIVE_T0, f0: Some(hz), intonation: Some(Intonation::Flat), open_end: Some(true), ..Default::default() });
     let vowel = &plan.segments[plan.segments.len() - 1];
     let mut out: Vec<Gesture> = plan.gestures.iter().map(|g| g.tag(if g.targets.has(ControlKey::F0) { o.tag + 1.0 } else { o.tag })).collect();
@@ -304,8 +328,9 @@ pub fn plan_note_off(syl: &Syllable, midi: f64, body: BodyMix) -> Vec<Gesture> {
 fn tail(syl: &Syllable, body: BodyMix, hz: f64) -> Vec<Segment> {
     let parts = diphthong_parts(&syl.nucleus.ipa);
     let mut out: Vec<Segment> = Vec::new();
-    if let Some((_, b)) = parts {
-        out.push(Segment { ipa: b.to_string(), dur: Some(0.07), stress: Some(1), f0: Some(hz), word_end: None, aspirated: None });
+    // a falling diphthong glides off at the end; a rising one already holds its vowel
+    if let (Some((_, b)), false) = (parts, is_rising(&syl.nucleus.ipa)) {
+        out.push(Segment { ipa: b.to_string(), dur: Some(0.07), stress: Some(1), f0: Some(hz), word_end: None, aspirated: None, vot: None });
     }
     out.extend(consonants(&syl.coda, body, 0.7));
     out

@@ -126,7 +126,7 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                 if vw.round { 0.12 } else { 0.85 },
                 0.4 * (1.0 - vw.back) - 0.5 * vw.height * vw.back,
                 0.4 * (1.0 - vw.height) * (1.0 - vw.back) - if vw.round { 0.4 } else { 0.0 },
-                if vw.ipa == "ɝ" { 0.6 } else { 0.0 },
+                if vw.ipa == "ɝ" { 0.6 } else if vw.ipa == "ʅ" { 0.5 } else { 0.0 },
             ];
             if vw.ipa == "ɯ" {
                 x0 = vec![2.6, 7.35, 0.25, 0.5, 0.1, 0.65, 0.4, 0.2, 0.0];
@@ -139,7 +139,7 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                     return 50.0;
                 }
                 let mut c = 0.0;
-                let w = [1.0, 1.0, if vw.ipa == "ɝ" { 1.2 } else { 0.45 }];
+                let w = [1.0, 1.0, if matches!(vw.ipa, "ɝ" | "ʅ") { 1.2 } else { 0.45 }];
                 for i in 0..3 {
                     c += w[i] * pow(ln(f[i] / t[i]), 2.0);
                 }
@@ -170,7 +170,7 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                 // give the same formants, and without this the fit wandered (a schwa with the
                 // tongue as low as /ɑ/), making every transition through it needlessly long
                 c += 0.006 * (pow(p[0] - x0[0], 2.0) + pow(p[1] - x0[1], 2.0));
-                if vw.ipa != "ɝ" {
+                if !matches!(vw.ipa, "ɝ" | "ʅ") {
                     c += 0.5 * p[8] * p[8];
                 }
                 c

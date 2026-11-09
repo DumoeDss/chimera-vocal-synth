@@ -204,7 +204,7 @@ fn load_notes(path: &str) -> Result<Vec<Note>, String> {
                 melisma: None,
                 word_end: true,
                 phrase_end: false,
-                pitch: vec![],
+                ..Default::default()
             },
             phrase_start: false,
             prev_end: f64::NEG_INFINITY,
@@ -1290,7 +1290,7 @@ mod tests {
                 melisma: None,
                 word_end: true,
                 phrase_end: true,
-                pitch: vec![],
+                ..Default::default()
             },
             phrase_start: true,
             prev_end: f64::NEG_INFINITY,
