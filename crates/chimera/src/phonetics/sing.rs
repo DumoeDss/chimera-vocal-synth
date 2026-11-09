@@ -13,7 +13,7 @@
 
 use super::inventory::phoneme;
 use crate::anatomy::human::{ArticKey, BodyMix};
-use super::planner::{PlanOptions, diphthong_parts, is_rising, plan_utterance};
+use super::planner::{PlanOptions, held_vowel, offglide, onglide, plan_utterance};
 use super::{Bend, Edge, Intonation, Plan, PlannedSegment, Segment, Syllable};
 use crate::control::score::{ControlKey, Gesture, Targets};
 use crate::math::{js_max, js_min};
@@ -27,8 +27,11 @@ fn cdur(ipa: &str, body: BodyMix, k: f64) -> f64 {
     phoneme(ipa, body).map_or(0.07, |d| d.dur) * k
 }
 
+/// Sung consonants: a duration the front end gives is its own (a language's timing: Mandarin's long
+/// nasal codas); otherwise the phoneme's spoken length times `k`. Either is squeezed when a note is
+/// too short for it.
 fn consonants(segs: &[Segment], body: BodyMix, k: f64) -> Vec<Segment> {
-    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(cdur(&c.ipa, body, k)), aspirated: c.aspirated, vot: c.vot, ..Default::default() }).collect()
+    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(c.dur.unwrap_or_else(|| cdur(&c.ipa, body, k))), aspirated: c.aspirated, vot: c.vot, ..Default::default() }).collect()
 }
 
 /// Sung consonants at their note's pitch: an onset consonant moves the pitch to the new note
@@ -154,7 +157,13 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         // each note's onset and coda consonants, at the note's pitch (a coda at the pitch of the
         // note whose syllable it ends; a melisma has neither)
         let hz_of = |k: usize| midi_to_hz(notes[k].midi);
-        let mut onsets: Vec<Vec<Segment>> = (i..=j).map(|k| if melisma(&notes[k].syl) { Vec::new() } else { consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(0.8), hz_of(k)) }).collect();
+        // a bend at the vowel's start begins in the onset: the consonants already sing its pitch, so
+        // a rising tone starts low instead of starting at the note and dipping
+        let onset_hz = |k: usize| {
+            let start = notes[k].syl.pitch.iter().find(|b| b.at == Edge::Start).map_or(0.0, |b| b.st);
+            hz_of(k) * crate::math::pow(2.0, start / 12.0)
+        };
+        let mut onsets: Vec<Vec<Segment>> = (i..=j).map(|k| if melisma(&notes[k].syl) { Vec::new() } else { consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(0.8), onset_hz(k)) }).collect();
         let mut codas: Vec<Vec<Segment>> = (i..=j)
             .map(|k| if k < j && melisma(&notes[k + 1].syl) { Vec::new() } else { consonants_at(&last_of_chain(notes, k).coda, o.body, o.consonant_scale.unwrap_or(0.8), hz_of(k)) })
             .collect();
@@ -179,24 +188,22 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             // only consonants squeezed to their floor can leave less than MIN_VOWEL
             let vdur = js_max(0.02, note_end - times[k] - total(&coda));
             segs.extend(onset);
-            let parts = diphthong_parts(&n.syl.nucleus.ipa);
-            let rising = is_rising(&n.syl.nucleus.ipa);
-            match parts {
-                // a rising diphthong: the glide on the beat, short, then the vowel holds
-                Some((a, b)) if rising && !melisma(&n.syl) => {
-                    let g = js_min(0.25 * vdur, RISING_GLIDE);
-                    segs.push(Segment { ipa: a.to_string(), dur: Some(g), f0: Some(hz), stress: Some(1), ..Default::default() });
-                    segs.push(Segment { ipa: b.to_string(), dur: Some(vdur - g), f0: Some(hz), stress: Some(1), ..Default::default() });
+            // the nucleus in time: a rising on-glide short on the beat (not on a melisma's later
+            // notes), the vowel that holds, and a falling off-glide in the note's last fifth (not
+            // when a melisma continues the vowel)
+            let nuc = n.syl.nucleus.ipa.as_str();
+            let on = onglide(nuc).filter(|_| !melisma(&n.syl));
+            let g = if on.is_some() { js_min(0.25 * vdur, RISING_GLIDE) } else { 0.0 };
+            if let Some(a) = on {
+                segs.push(Segment { ipa: a.to_string(), dur: Some(g), f0: Some(hz), stress: Some(1), ..Default::default() });
+            }
+            let rest = vdur - g;
+            match offglide(nuc).filter(|_| !next_melisma) {
+                Some(b) => {
+                    segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest * 0.8), f0: Some(hz), stress: Some(1), ..Default::default() });
+                    segs.push(Segment { ipa: b.to_string(), dur: Some(rest * 0.2), f0: Some(hz), stress: Some(1), ..Default::default() });
                 }
-                Some((a, b)) if !next_melisma && !rising => {
-                    segs.push(Segment { ipa: a.to_string(), dur: Some(vdur * 0.8), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
-                    segs.push(Segment { ipa: b.to_string(), dur: Some(vdur * 0.2), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
-                }
-                _ => {
-                    // a held vowel: a falling diphthong holds its first part, a rising one its second
-                    let ipa = parts.map_or(n.syl.nucleus.ipa.clone(), |p| if rising { p.1 } else { p.0 }.to_string());
-                    segs.push(Segment { ipa, dur: Some(vdur), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
-                }
+                None => segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest), f0: Some(hz), stress: Some(1), ..Default::default() }),
             }
             if coda.first().is_some_and(|c| matches!(c.ipa.as_str(), "m" | "n" | "ŋ")) {
                 // the syllable whose coda this is decides (a melisma's coda is its parent's)
@@ -285,12 +292,10 @@ pub fn plan_note_on(syl: &Syllable, midi: f64, o: &NoteOnOptions) -> Vec<Gesture
         segs.extend(tail(&l.syl, o.body, midi_to_hz(l.midi)));
     }
     segs.extend(consonants(&syl.onset, o.body, 0.7));
-    let parts = diphthong_parts(&syl.nucleus.ipa);
-    let rising = is_rising(&syl.nucleus.ipa);
-    if let (Some((a, _)), true) = (parts, rising) {
+    if let Some(a) = onglide(&syl.nucleus.ipa) {
         segs.push(Segment { ipa: a.to_string(), dur: Some(RISING_GLIDE * 0.6), f0: Some(hz), stress: Some(1), ..Default::default() });
     }
-    segs.push(Segment { ipa: parts.map_or(syl.nucleus.ipa.clone(), |p| if rising { p.1 } else { p.0 }.to_string()), dur: Some(HOLD), f0: Some(hz), stress: Some(1), word_end: None, aspirated: None, vot: None });
+    segs.push(Segment { ipa: held_vowel(&syl.nucleus.ipa).to_string(), dur: Some(HOLD), f0: Some(hz), stress: Some(1), ..Default::default() });
     let plan = plan_utterance(&segs, &PlanOptions { body: o.body, t0: LIVE_T0, f0: Some(hz), intonation: Some(Intonation::Flat), open_end: Some(true), ..Default::default() });
     let vowel = &plan.segments[plan.segments.len() - 1];
     let mut out: Vec<Gesture> = plan.gestures.iter().map(|g| g.tag(if g.targets.has(ControlKey::F0) { o.tag + 1.0 } else { o.tag })).collect();
@@ -326,11 +331,10 @@ pub fn plan_note_off(syl: &Syllable, midi: f64, body: BodyMix) -> Vec<Gesture> {
 
 /// What follows a held vowel: the diphthong's glide (at the note's pitch) and the coda.
 fn tail(syl: &Syllable, body: BodyMix, hz: f64) -> Vec<Segment> {
-    let parts = diphthong_parts(&syl.nucleus.ipa);
     let mut out: Vec<Segment> = Vec::new();
-    // a falling diphthong glides off at the end; a rising one already holds its vowel
-    if let (Some((_, b)), false) = (parts, is_rising(&syl.nucleus.ipa)) {
-        out.push(Segment { ipa: b.to_string(), dur: Some(0.07), stress: Some(1), f0: Some(hz), word_end: None, aspirated: None, vot: None });
+    // a falling diphthong (or a triphthong) glides off at the end; a rising one already holds its vowel
+    if let Some(b) = offglide(&syl.nucleus.ipa) {
+        out.push(Segment { ipa: b.to_string(), dur: Some(0.07), stress: Some(1), f0: Some(hz), ..Default::default() });
     }
     out.extend(consonants(&syl.coda, body, 0.7));
     out

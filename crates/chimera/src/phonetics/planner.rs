@@ -63,13 +63,43 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
         "uɑ" => &["u", "ɑ"],
         "uə" => &["u", "ə"],
         "yɛ" => &["y", "ɛ"],
+        "uɔ" => &["u", "ɔ"],
+        // a central start, Mandarin's ou ([əʊ], where English [oʊ] starts nearly at [u])
+        "əʊ" => &["ə", "ʊ"],
+        // triphthongs: a glide into a falling diphthong (Mandarin iao, iou, uai, uei)
+        "iaʊ" => &["i", "a", "ʊ"],
+        "iəʊ" => &["i", "ə", "ʊ"],
+        "uaɪ" => &["u", "a", "ɪ"],
+        "ueɪ" => &["u", "e", "i"],
         _ => return None,
     })
 }
 
-/// A rising diphthong: its first part is a short glide and its second the vowel that holds.
+/// A rising nucleus (a rising diphthong or a triphthong): its first part is a short glide.
 pub fn is_rising(ipa: &str) -> bool {
-    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ")
+    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ")
+}
+
+/// A rising nucleus's on-glide (its first part), sung short at the note's start.
+pub fn onglide(ipa: &str) -> Option<&'static str> {
+    if is_rising(ipa) { expand(ipa).map(|p| p[0]) } else { None }
+}
+
+/// The vowel a sung note holds: a falling diphthong's first part, a rising nucleus's second, else
+/// the vowel itself.
+pub fn held_vowel(ipa: &str) -> &str {
+    match expand(ipa) {
+        Some(p) if p.len() >= 2 => p[usize::from(is_rising(ipa))],
+        _ => ipa,
+    }
+}
+
+/// What a held note glides off to at its end: a falling diphthong's (or a triphthong's) last part.
+pub fn offglide(ipa: &str) -> Option<&'static str> {
+    match expand(ipa) {
+        Some(p) if p.len() == 3 || (p.len() == 2 && !is_rising(ipa)) => Some(p[p.len() - 1]),
+        _ => None,
+    }
 }
 
 /// The two vowel targets of a diphthong ("aɪ" → ("a", "ɪ")), or None.
@@ -212,9 +242,15 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
     for (si, s) in input.iter().enumerate() {
         if let Some(parts) = expand(&s.ipa) {
             let base = durs[si];
+            // shares of the duration: a falling diphthong 55/45, a rising one 30/70, a triphthong 25/45/30
+            let shares: &[f64] = match (parts.len(), is_rising(&s.ipa)) {
+                (2, false) => &[0.55, 0.45],
+                (2, true) => &[0.3, 0.7],
+                (3, _) => &[0.25, 0.45, 0.3],
+                _ => &[1.0],
+            };
             for (i, p) in parts.iter().enumerate() {
-                let first = if is_rising(&s.ipa) { 0.3 } else { 0.55 };
-                let dur = if parts.len() > 1 { base * (if i == 0 { first } else { 1.0 - first }) } else { base };
+                let dur = base * shares.get(i).copied().unwrap_or(1.0);
                 segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, vot: None });
             }
         } else {

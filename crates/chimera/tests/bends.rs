@@ -62,3 +62,17 @@ fn a_syllable_can_ask_for_its_own_breath() {
     assert_eq!(b.len(), 1);
     assert_eq!(b[0].targets.get(ControlKey::BREATH), Some(0.7));
 }
+
+#[test]
+fn a_start_bend_begins_in_the_onset() {
+    // a rising tone starts low: the onset consonant already sings the bend's pitch, not the note's
+    let hz = midi_to_hz(57.0);
+    let up = Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -3.0 };
+    let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("m", "a", &[], vec![up]) }], &opts(None));
+    let onset_f0: Vec<f64> = p.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).collect();
+    assert!(!onset_f0.is_empty());
+    assert!(onset_f0.iter().all(|f| (f / hz - 2f64.powf(-3.0 / 12.0)).abs() < 1e-9), "{onset_f0:?}");
+    // without a start bend the onset sings the note
+    let plain = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("m", "a", &[], vec![]) }], &opts(None));
+    assert!(plain.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).all(|f| (f - hz).abs() < 1e-9));
+}
