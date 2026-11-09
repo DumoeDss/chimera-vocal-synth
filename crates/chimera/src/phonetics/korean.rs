@@ -7,6 +7,7 @@
 //! The engine has no tense (fortis) stops, so tense ㄲ ㄸ ㅃ ㅉ sing as unaspirated (voiced) stops,
 //! and lax and aspirated stops both take the planner's aspiration. ㅅ before [i] or [j] is [ʃ].
 
+use super::syllables::FrontEnd;
 use super::{Segment, Syllable};
 
 const BASE: u32 = 0xAC00;
@@ -223,4 +224,16 @@ pub fn word_syllables(word: &str) -> Vec<Syllable> {
         });
     }
     out
+}
+
+/// The Korean front end: Hangul blocks, by the rules above (no data needed).
+pub struct Korean;
+
+impl FrontEnd for Korean {
+    fn starts(&self, c: char) -> bool {
+        is_hangul(c)
+    }
+    fn word(&self, word: &str) -> Vec<Syllable> {
+        word_syllables(word)
+    }
 }

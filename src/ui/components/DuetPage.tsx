@@ -83,7 +83,7 @@ export function DuetPage(props: { id: string }) {
       const words = melodies.map((m) => {
         if (!m) return null;
         try {
-          return sungWords(m, lyricsToSyllables(m.lyrics), show.spell);
+          return sungWords(m, m.syllables ?? lyricsToSyllables(m.lyrics), show.spell);
         } catch (e) {
           console.warn("duet: no words for a voice:", e);
           return null;

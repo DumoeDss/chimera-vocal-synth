@@ -378,6 +378,32 @@ fn render_notes_artic_tracks_follow_the_sound_without_changing_it() {
 }
 
 #[test]
+fn render_notes_sings_a_front_ends_syllables_without_lyrics() {
+    // a language front end writes IPA syllables; no lyrics, no pronouncing dictionary
+    let melody = tmp("melody-syllables.json");
+    let syl = |onset: &[&str], v: &str, coda: &[&str]| {
+        let segs = |xs: &[&str]| xs.iter().map(|x| serde_json::json!({ "ipa": x })).collect::<Vec<_>>();
+        serde_json::json!({ "text": v, "onset": segs(onset), "nucleus": { "ipa": v }, "coda": segs(coda), "wordEnd": true, "phraseEnd": false })
+    };
+    let j = serde_json::json!({
+        "bpm": 120, "t0": 0, "notes": [[0, 1], [67, 1], [63, 0.5], [60, 1.5]],
+        "syllables": [syl(&["t"], "eɪ", &["k"]), syl(&["m"], "aɪ", &[]), syl(&["h"], "æ", &["n", "d"])],
+    });
+    std::fs::write(&melody, j.to_string()).unwrap();
+    let (stem, tracks) = (tmp("notes-syllables"), tmp("notes-syllables-artic.json"));
+    let stdout = chimera(&["render", "notes", &melody, &stem, "female", "--artic", &tracks]);
+    assert!(stdout.contains("3 notes"), "{stdout}");
+    let t: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&tracks).unwrap()).unwrap();
+    let keys: Vec<&str> = t["keys"].as_array().unwrap().iter().map(|k| k.as_str().unwrap()).collect();
+    let lip = keys.iter().position(|k| *k == "lipAp").unwrap();
+    let ap = |i: usize| t["frames"][i][lip].as_f64().unwrap();
+    // the /m/ of the second syllable (its note starts at 1 s) closes the lips, its vowel opens them
+    let closed = (85..105).map(ap).fold(f64::MAX, f64::min);
+    let open = (105..125).map(ap).fold(f64::MIN, f64::max);
+    assert!(closed < 0.1 && open > 0.5, "lipAp closed {closed}, open {open}");
+}
+
+#[test]
 fn render_notes_tele_records_the_live_telemetry_without_changing_the_sound() {
     let melody = tmp("tele-melody.json");
     std::fs::write(
