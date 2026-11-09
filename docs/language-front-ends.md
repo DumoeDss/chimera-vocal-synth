@@ -60,11 +60,11 @@ A sung syllable per sounding note:
 - `onset` / `coda`: consonants and glides from the inventory. A stop or affricate may say
   `"aspirated": true|false` (unsaid: English's rule; `ʰ` and `˭` in IPA text) and `"vot"`, how long
   its aspiration lasts in seconds (unsaid: 50 ms). Any consonant may say its sung `"dur"` (s;
-  unsaid: its spoken length × 0.8): that's how a language holds its nasal codas or keeps an
+  unsaid: its spoken length × 1.25): that's how a language holds its nasal codas or keeps an
   affricate's frication short.
 - `nucleus`: one vowel, or a diphthong the planner knows. A note sings it as an on-glide, a held
   vowel and an off-glide. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold their first vowel and glide off in
-  the note's last fifth. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing a short glide on the
+  the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing a short glide on the
   beat, a quarter of the vowel and at most 120 ms, then hold the second vowel. Triphthongs (iaʊ
   iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting the glide in the onset,
   where it's squeezed before the beat with the consonants. The apical vowels ɿ (四) and ʅ (是) are
@@ -183,6 +183,23 @@ cumulative, on the poems):
 
 What's left is mostly engine-bound: -ng heard as -n (uang→uan ×16), and the sibilants (sh→f/s/ch,
 s→sh). Those live in the noise source and the nasal murmur, not the front end.
+
+English's report (phonemes via CMUdict: the reference against the heard words) showed something else:
+sounds *dropped* rather than confused, 29% of vowels and 28% of consonants, and word-initial
+consonants most (58% of them lost). Sung consonants were 0.8× their spoken length, too short for a
+held note. Same loop, Harvard sentences (`probes/en_harvard.txt`), 8 scrambles × 2 voices:
+
+| Change | Confusion it targeted | English | Mandarin poems | Korean 아리랑 |
+|---|---|---|---|---|
+| before | | 71.5% | 34.5% | 59.2% |
+| sung consonants 1.0× | dropped onsets | 69.2% | | |
+| sung consonants 1.25× | dropped onsets; D→T ×20 → ×10 | 68.1% | 33.9% | **56.6%** |
+| sung consonants 1.5× | | 70.7% (overshoots) | | |
+| 1.25×, and off-glides over 35% of the note (was 20%) | EY heard as IH, OW as AH | **66.1%** | **30.6%** | 56.6% (no diphthongs) |
+
+Both are now the planner's defaults; a live keyboard note keeps short consonants for latency. What
+English still gets wrong: AH heard as ER (her, were), AA as AH/AE, DH as L, and SH/S as F: the same
+weak sibilant noise as Mandarin's sh→f.
 
 Use Whisper large-v3 only on whole clips, with its transcript capped near the reference length: on
 short clips it hallucinates subtitle credits, and on whole clips it can loop. Paraformer-zh

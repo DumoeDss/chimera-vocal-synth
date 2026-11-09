@@ -450,12 +450,12 @@ fn render_notes_tele_records_the_live_telemetry_without_changing_the_sound() {
         assert!((at(i, 10) as f64 - (i * hop) as f64 / 48000.0).abs() < 1e-4, "frame {i} clock {}", at(i, 10));
     }
     // silent before the first note (a beat's rest: it starts at 0.5 s), then "Take" voiced on
-    // G4 (392 Hz): frames 38-53 are 0.61-0.85 s
+    // G4 (392 Hz): frames 38-48 are 0.61-0.77 s, before the /k/ closes
     let out_rms = |i: usize| at(i, 6);
     assert!((1..20).all(|i| out_rms(i) < 1e-4), "noise before the first note");
-    let sung = 38..54;
+    let sung = 38..49;
     assert!(sung.clone().all(|i| out_rms(i) > 1e-2 && at(i, 4) > 0.5), "not voiced while singing");
-    let f0 = sung.map(|i| at(i, 3)).sum::<f32>() / 16.0;
+    let f0 = sung.clone().map(|i| at(i, 3)).sum::<f32>() / sung.len() as f32;
     assert!((f0 - 392.0).abs() < 12.0, "f0 {f0}");
     // the articulators agree with --artic's (lipAp at 1.0 s: artic frame 100, tele frame 62.5)
     let keys: Vec<&str> = artic["keys"].as_array().unwrap().iter().map(|k| k.as_str().unwrap()).collect();

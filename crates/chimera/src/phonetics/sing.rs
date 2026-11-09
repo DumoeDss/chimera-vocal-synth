@@ -44,6 +44,16 @@ fn consonants_at(segs: &[Segment], body: BodyMix, k: f64, hz: f64) -> Vec<Segmen
     out
 }
 
+/// Sung consonants are this long relative to spoken (unless a front end gives their duration).
+/// Measured with the scramble test: 0.8 (as before) lost consonants, word-initial ones most; 1.25
+/// gained 3.4 points in English and 2.6 in Korean, neutral in Mandarin; 1.5 overshot.
+pub const SUNG_CONSONANTS: f64 = 1.25;
+
+/// A falling diphthong (or a triphthong) glides off over this share of its held part. At 0.2 the
+/// glide was too short to hear on a long note (English EY heard as IH, AY as AH); 0.35 gained 2.0
+/// points in English and 3.3 in Mandarin.
+const OFFGLIDE: f64 = 0.35;
+
 /// a rising diphthong's glide lasts a quarter of its vowel, at most this long (s)
 const RISING_GLIDE: f64 = 0.12;
 
@@ -101,7 +111,7 @@ pub struct SongOptions {
     /// Mandarin singers do; None or 0: the velum lowers only for the nasal itself
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nasal_lead: Option<f64>,
-    /// sung consonant length relative to spoken (None: 0.8)
+    /// sung consonant length relative to spoken (None: SUNG_CONSONANTS, 1.25)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consonant_scale: Option<f64>,
 }
@@ -163,9 +173,9 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let start = notes[k].syl.pitch.iter().find(|b| b.at == Edge::Start).map_or(0.0, |b| b.st);
             hz_of(k) * crate::math::pow(2.0, start / 12.0)
         };
-        let mut onsets: Vec<Vec<Segment>> = (i..=j).map(|k| if melisma(&notes[k].syl) { Vec::new() } else { consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(0.8), onset_hz(k)) }).collect();
+        let mut onsets: Vec<Vec<Segment>> = (i..=j).map(|k| if melisma(&notes[k].syl) { Vec::new() } else { consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(SUNG_CONSONANTS), onset_hz(k)) }).collect();
         let mut codas: Vec<Vec<Segment>> = (i..=j)
-            .map(|k| if k < j && melisma(&notes[k + 1].syl) { Vec::new() } else { consonants_at(&last_of_chain(notes, k).coda, o.body, o.consonant_scale.unwrap_or(0.8), hz_of(k)) })
+            .map(|k| if k < j && melisma(&notes[k + 1].syl) { Vec::new() } else { consonants_at(&last_of_chain(notes, k).coda, o.body, o.consonant_scale.unwrap_or(SUNG_CONSONANTS), hz_of(k)) })
             .collect();
         // the phrase's last vowel leaves a short breath before the next phrase. The call's last
         // phrase is followed by a rest (callers split phrases at rests), so the breath comes from
@@ -189,7 +199,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let vdur = js_max(0.02, note_end - times[k] - total(&coda));
             segs.extend(onset);
             // the nucleus in time: a rising on-glide short on the beat (not on a melisma's later
-            // notes), the vowel that holds, and a falling off-glide in the note's last fifth (not
+            // notes), the vowel that holds, and a falling off-glide over the held part's last OFFGLIDE (not
             // when a melisma continues the vowel)
             let nuc = n.syl.nucleus.ipa.as_str();
             let on = onglide(nuc).filter(|_| !melisma(&n.syl));
@@ -200,8 +210,8 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let rest = vdur - g;
             match offglide(nuc).filter(|_| !next_melisma) {
                 Some(b) => {
-                    segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest * 0.8), f0: Some(hz), stress: Some(1), ..Default::default() });
-                    segs.push(Segment { ipa: b.to_string(), dur: Some(rest * 0.2), f0: Some(hz), stress: Some(1), ..Default::default() });
+                    segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest * (1.0 - OFFGLIDE)), f0: Some(hz), stress: Some(1), ..Default::default() });
+                    segs.push(Segment { ipa: b.to_string(), dur: Some(rest * OFFGLIDE), f0: Some(hz), stress: Some(1), ..Default::default() });
                 }
                 None => segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest), f0: Some(hz), stress: Some(1), ..Default::default() }),
             }
