@@ -8,6 +8,7 @@ SenseVoice (sherpa-onnx, CTC: it can't hallucinate a loop) transcribes one sung 
 Score: syllable errors (Chinese: toneless pinyin; Korean: Hangul blocks) or word errors (English).
 
 usage: scramble.py <outdir> [--langs zh,ko,en] [--shuffles 3] [--bodies male,female]
+                   [--text lang:file]   (your own lines for one language, one line per phrase)
 Needs the release CLI (cargo build --release -p chimera-cli) and tools/asr/setup.sh.
 The texts are public domain: two Tang poems (静夜思, 春晓), the folk song 아리랑, Harvard sentences.
 """
@@ -120,6 +121,10 @@ def main():
     langs = opt("--langs", "zh,ko,en").split(",")
     shuffles = int(opt("--shuffles", "3"))
     bodies = opt("--bodies", "male,female").split(",")
+    if "--text" in args:
+        lang, path = opt("--text", "").split(":", 1)
+        TEXTS[lang] = [ln.strip() for ln in open(path, encoding="utf-8") if ln.strip()]
+        langs = [lang]
     os.makedirs(out, exist_ok=True)
     import sherpa_onnx
     sv = {}

@@ -22,7 +22,7 @@ one exception: it is still the planner's default when a front end says nothing.
 |---|---|---|---|
 | Latin | English | CMUdict (letter-to-sound until it loads) | `phonetics/english.rs`, `syllables.rs` |
 | Hangul | Korean | nothing: the block's letters are its sounds | `phonetics/korean.rs` |
-| Han | Mandarin | `public/data/mandarin.txt.gz` (206 KB, loaded when lyrics have Han characters) | `phonetics/mandarin.rs` |
+| Han | Mandarin | `public/data/mandarin.txt.gz` (208 KB, loaded when lyrics have Han characters) | `phonetics/mandarin.rs` |
 | Latin with tones | Mandarin as pinyin | nothing (checked against Mandarin's 411 syllables) | `phonetics/mandarin.rs` (`Pinyin`) |
 
 The router (`read_lyrics` in `syllables.rs`) sends each word to the front end whose script it is
@@ -38,6 +38,9 @@ claims only a word that carries tones and parses fully into real syllables:
 - **Tone changes:** third-tone sandhi applies inside a word (`nǐhǎo` sings nǐ rising). Write 不 and 一
   with the tone they're sung with (`bú`, `yí`), since pinyin alone can't tell 不 from 部.
 
+Both Mandarin front ends sing erhua as one syllable ending in ɻ: 一点儿 is 一 + 点儿 (pinyin
+`yìdiǎnr`), 哪儿 is `nǎr`. A 儿 that is a word's own syllable (女儿, 儿子) stays a syllable.
+
 Words without tones are English. A declined word isn't re-entered midway, so `café` stays English.
 The one ambiguity: an accented English word that is also valid toned pinyin (`résumé`, *ré su mé*)
 reads as pinyin; type it unaccented.
@@ -49,16 +52,24 @@ reads as pinyin; type it unaccented.
 A sung syllable per sounding note:
 
 ```json
-{ "text": "话", "onset": [{"ipa": "x"}, {"ipa": "w"}], "nucleus": {"ipa": "a"}, "coda": [],
+{ "text": "话", "onset": [{"ipa": "x"}], "nucleus": {"ipa": "ua"}, "coda": [],
   "pitch": [{"at": "start", "len": 0.21, "max": 0.09, "st": 1}, {"at": "end", "len": 0.35, "max": 0.15, "st": -3}],
   "wordEnd": true, "phraseEnd": false }
 ```
 
 - `onset` / `coda`: consonants and glides from the inventory. A stop or affricate may say
-  `"aspirated": true|false`; unsaid, the planner uses English's rule. In IPA text, `ʰ` and `˭` say it.
-- `nucleus`: one vowel, or a diphthong the planner knows (aɪ eɪ aʊ oʊ ɔɪ).
+  `"aspirated": true|false` (unsaid: English's rule; `ʰ` and `˭` in IPA text) and `"vot"`, how long
+  its aspiration lasts in seconds (unsaid: 50 ms).
+- `nucleus`: one vowel, or a diphthong the planner knows. Falling ones (aɪ eɪ aʊ oʊ ɔɪ) hold their
+  first vowel. Rising ones (ia iɛ iɑ iʊ ua uo uɑ uə yɛ) sing a short glide on the beat, a quarter of
+  the vowel and at most 120 ms, then hold the second vowel: use them for medial glides rather than
+  putting the glide in the onset, where it's squeezed before the beat. The apical vowels ɿ (四) and ʅ
+  (是) are calibrated vowels too.
 - `pitch`: bends that colour the note's start or end, `st` semitones from the note, over `len` of the
   vowel and at most `max` seconds. The melody stays as written.
+- `breath`: lung drive while the note sounds, relative to the phrase's (unsaid: the phrase's).
+- `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: the song's
+  `nasalLead`, off by default).
 - A melisma note is `"melisma": true` with the same nucleus; its coda moves to the run's last note.
 - `text` is what the mouth, the lyrics panel and the piano roll show.
 
@@ -112,6 +123,10 @@ Results, 3 scrambles × 2 voices per language:
 - **Every language is limited by the sung voice.** On sound alone they all land around 45–75%
   (English's words are a stricter unit than syllables).
 
+Pass `--text lang:file` to run your own lines: material dense in what a change touches is the only
+way to see it. The poems above have almost no apical, vowel-initial or neutral-tone syllables, so
+changes to those are invisible on them.
+
 The Mandarin front end's choices, A/B on the same test (8 scrambles × 2 voices, 640 syllables):
 
 | Mandarin front end | Scrambled (male / female) | Real lyrics |
@@ -122,6 +137,22 @@ The Mandarin front end's choices, A/B on the same test (8 scrambles × 2 voices,
 
 Both choices help in both voices, and on real lyrics too. Saying the aspiration is worth about 6
 points (two standard errors at 640 syllables). The tone bends are worth about 4.
+
+Then the front end's mouth and breath, one change at a time, on the poems or on lines written to be
+dense in what each touches:
+
+| Change | Text | Scrambled before → after | Kept |
+|---|---|---|---|
+| Medials inside the vowel (rising diphthongs) | poems | 48.6% → **44.2%** | yes |
+| Apical vowels ɿ ʅ instead of [ɨ] | apical-dense lines | 66.3% → **46.2%** | yes |
+| Glottal catch before a vowel-initial syllable | vowel-initial lines | 61.9% → **57.8%** | yes |
+| 90 ms aspiration (`vot`) | poems | 48.6% → 49.2% | yes (neutral; Mandarin's is ~80–100 ms) |
+| Nasalised vowels before -n/-ng | poems | neutral | yes |
+| Neutral tones at 0.7 breath | vowel-initial lines | 61.2% → 61.9%, real lines worse | no |
+| Lips following the vowel for x/j/q | poems | 48.6% → 51.1% | no (spread lips sharpen ɕ) |
+
+The biggest wins came from the sounds the recogniser confused most: the apical vowels (是 heard as
+虚) and the medial glides (话 drifting toward 哈).
 
 Use Whisper large-v3 only on whole clips, with its transcript capped near the reference length: on
 short clips it hallucinates subtitle credits, and on whole clips it can loop. Paraformer-zh
