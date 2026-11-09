@@ -152,7 +152,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         let mut vowel_spans: Vec<(f64, f64)> = Vec::new();
         // (note, vowel start, vowel end) of syllables with bends, and of vowels before a nasal coda
         let mut bend_spans: Vec<(usize, f64, f64)> = Vec::new();
-        let mut nasal_spans: Vec<(f64, f64, f64)> = Vec::new();
+        let mut nasal_spans: Vec<(f64, f64, f64, &str)> = Vec::new();
         let mut breath_spans: Vec<(f64, f64, f64)> = Vec::new();
         // each note's onset and coda consonants, at the note's pitch (a coda at the pitch of the
         // note whose syllable it ends; a melisma has neither)
@@ -209,7 +209,10 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
                 // the syllable whose coda this is decides (a melisma's coda is its parent's)
                 let lead = last_of_chain(notes, k).nasal_lead.or(o.nasal_lead).unwrap_or(0.0);
                 if lead > 0.0 {
-                    nasal_spans.push((times[k], times[k] + vdur, lead));
+                    // the tongue body's rise toward -ng after the back vowel ɑ (ang, iang, uang); after
+                    // other vowels, and toward -n, it measured no better or worse
+                    let place = if coda[0].ipa == "ŋ" && held_vowel(nuc) == "ɑ" { "velar" } else { "" };
+                    nasal_spans.push((times[k], times[k] + vdur, lead, place));
                 }
             }
             if let Some(b) = last_of_chain(notes, k).breath {
@@ -230,9 +233,20 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             for &(k, a, b) in &bend_spans {
                 bend_gestures(&notes[k].syl.pitch, hz_of(k), a, b, &mut gestures);
             }
-            for &(a, b, lead) in &nasal_spans {
+            for &(a, b, lead, place) in &nasal_spans {
                 let t0 = b - js_min(lead * (b - a), 0.25);
                 gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 4.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
+                // and the tongue on its way to the coda's place, which is where -n and -ng differ
+                // in the vowel: the body rising toward the velum for -ng, the tip toward the ridge
+                // for -n (short of closure; the coda closes)
+                let approach = match place {
+                    "velar" => Some(Targets::default().with(ArticKey::TbY, 7.95)),
+                    "alveolar" => Some(Targets::default().with(ArticKey::TtX, 6.2).with(ArticKey::TtY, 9.3)),
+                    _ => None,
+                };
+                if let Some(t) = approach {
+                    gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 2.5, t).label("coda approach"));
+                }
             }
             // a syllable's own breath, over the phrase's (strength 1): it wins while the note sounds
             for &(a, b, level) in &breath_spans {

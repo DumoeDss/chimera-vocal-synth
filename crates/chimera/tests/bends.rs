@@ -76,3 +76,18 @@ fn a_start_bend_begins_in_the_onset() {
     let plain = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("m", "a", &[], vec![]) }], &opts(None));
     assert!(plain.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).all(|f| (f - hz).abs() < 1e-9));
 }
+
+#[test]
+fn before_ng_after_a_back_vowel_the_tongue_rises_toward_the_velum() {
+    // in the nasal-lead window, -ng after ɑ gets the tongue body's approach; -n and other vowels don't
+    let approach = |v: &str, coda: &str| {
+        let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: Syllable { nasal_lead: Some(0.4), ..syl("t", v, &[coda], vec![]) } }], &opts(None));
+        labelled(&p.gestures, "coda approach").len()
+    };
+    assert_eq!(approach("ɑ", "ŋ"), 1);
+    assert_eq!(approach("ɑ", "n"), 0);
+    assert_eq!(approach("ə", "ŋ"), 0);
+    // no nasal lead, no approach
+    let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("t", "ɑ", &["ŋ"], vec![]) }], &opts(None));
+    assert!(labelled(&p.gestures, "coda approach").is_empty());
+}
