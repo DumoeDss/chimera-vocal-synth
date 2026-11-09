@@ -77,23 +77,13 @@ export class EnglishG2P {
   load(url = "/data/cmudict.txt.gz"): Promise<void> {
     if (this.isLoaded) return Promise.resolve();
     if (this.loading) return this.loading;
-    this.loading = (async () => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`dictionary ${res.status}`);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        // servers differ: some send Content-Encoding: gzip (already inflated by the browser)
-        let text: string;
-        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-          const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-          text = await new Response(stream).text();
-        } else text = new TextDecoder().decode(bytes);
-        this.setDictionaryText(text);
-      } catch (e) {
+    this.loading = fetchGzText(url).then(
+      (text) => this.setDictionaryText(text),
+      (e) => {
         this.loading = null; // allow a retry
         throw e;
-      }
-    })();
+      },
+    );
     return this.loading;
   }
 
@@ -113,7 +103,48 @@ export class EnglishG2P {
   }
 }
 
-/** Lyrics → sung syllables, through the page's dictionary (see EnglishG2P). */
+/** Fetch a gzipped text file (servers differ: some send Content-Encoding: gzip, already inflated). */
+async function fetchGzText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Response(stream).text();
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/** Han characters, which the Mandarin front end reads once its lexicon is loaded. */
+export const hasHan = (text: string): boolean => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(text);
+
+/** The Mandarin front end's lexicon (character and phrase readings), fetched once when needed. */
+export class MandarinLexicon {
+  private loading: Promise<void> | null = null;
+  private isLoaded = false;
+
+  get loaded(): boolean {
+    return this.isLoaded;
+  }
+
+  load(url = "/data/mandarin.txt.gz"): Promise<void> {
+    if (this.isLoaded) return Promise.resolve();
+    if (this.loading) return this.loading;
+    this.loading = fetchGzText(url).then(
+      (text) => {
+        call("zhLoad", { text });
+        this.isLoaded = true;
+      },
+      (e) => {
+        this.loading = null;
+        throw e;
+      },
+    );
+    return this.loading;
+  }
+}
+
+/** Lyrics → sung syllables through the built-in front ends: English (the page's dictionary, see EnglishG2P), Korean, and Mandarin once its lexicon is loaded. */
 export function lyricsToSyllables(text: string): Syllable[] {
   return call("lyricsToSyllables", { text });
 }

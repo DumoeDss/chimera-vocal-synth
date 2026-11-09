@@ -151,7 +151,8 @@ impl<F: Fn(&str, bool) -> Vec<Segment>> WordSource for F {
 }
 
 fn is_lyric_punct(c: char) -> bool {
-    matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | '\n')
+    // ASCII, and the full-width forms Chinese and Japanese lyrics use
+    matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | '\n' | '，' | '。' | '！' | '？' | '；' | '：' | '、')
 }
 
 /// A language front end: claims the words written in its script and turns each into sung syllables

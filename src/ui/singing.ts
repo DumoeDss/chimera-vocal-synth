@@ -8,8 +8,8 @@
  */
 import { create } from "zustand";
 import { engine } from "../audio/AudioEngine.ts";
-import { g2p } from "./speech.ts";
-import { lyricsToSyllables, type Syllable } from "../wasm/engine.ts";
+import { g2p, zh } from "./speech.ts";
+import { hasHan, lyricsToSyllables, type Syllable } from "../wasm/engine.ts";
 import { planSong, planNoteOn, planNoteOff, planMelisma } from "../wasm/engine.ts";
 import { EXHALE_LABEL } from "../wasm/engine.ts";
 import { DEMO_SONGS } from "../wasm/engine.ts";
@@ -59,26 +59,29 @@ export const useSing = create<SingState>((set, get) => ({
   setLyrics: (text) => {
     stopDemo();
     set({ lyrics: text, syllables: lyricsToSyllables(text), cursor: 0 });
+    if (hasHan(text) && !zh.loaded) ensureDictionary();
   },
   setCursor: (i) => set({ cursor: Math.max(0, Math.min(i, Math.max(0, get().syllables.length - 1))) }),
   setVibrato: (cents) => set({ vibrato: cents }),
 }));
 
-/** Load the pronouncing dictionary, then re-read the lyrics with it (the cursor stays). */
+/**
+ * Load what the lyrics' front ends need (the pronouncing dictionary; the Mandarin lexicon when there
+ * are Han characters), then re-read the lyrics with it (the cursor stays).
+ */
 export function ensureDictionary(): void {
-  if (g2p.loaded) return;
-  g2p
-    .load()
-    .then(() => {
-      const s = useSing.getState();
-      // a song that brings its own syllables (another language's front end) is not re-read as English
-      if (DEMO_SONGS.some((d) => d.syllables && d.lyrics === s.lyrics)) return;
-      const syllables = lyricsToSyllables(s.lyrics);
-      useSing.setState({ syllables, cursor: Math.min(s.cursor, Math.max(0, syllables.length - 1)) });
-    })
-    .catch(() => {
-      // no dictionary: the letter-to-sound rules keep working
-    });
+  const needs: Promise<void>[] = [];
+  if (!g2p.loaded) needs.push(g2p.load());
+  if (!zh.loaded && hasHan(useSing.getState().lyrics)) needs.push(zh.load());
+  if (!needs.length) return;
+  // a failed load leaves the rest working (letter-to-sound rules for English)
+  void Promise.allSettled(needs).then(() => {
+    const s = useSing.getState();
+    // a song that brings its own syllables (another language's front end) is not re-read
+    if (DEMO_SONGS.some((d) => d.syllables && d.lyrics === s.lyrics)) return;
+    const syllables = lyricsToSyllables(s.lyrics);
+    useSing.setState({ syllables, cursor: Math.min(s.cursor, Math.max(0, syllables.length - 1)) });
+  });
 }
 
 // ---- live notes
@@ -253,6 +256,7 @@ export async function playDemo(name: string, body: BodyMix, ready?: () => Promis
   } catch {
     // letter-to-sound rules
   }
+  if (!song.syllables && hasHan(song.lyrics)) await zh.load().catch(() => {});
   if (token !== demoToken) return;
   const syl = song.syllables ?? lyricsToSyllables(song.lyrics);
   if (!syl.length) return;

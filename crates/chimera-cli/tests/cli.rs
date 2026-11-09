@@ -404,6 +404,15 @@ fn render_notes_sings_a_front_ends_syllables_without_lyrics() {
 }
 
 #[test]
+fn render_notes_reads_chinese_lyrics_through_the_mandarin_front_end() {
+    // the bundled lexicon (public/data/mandarin.txt.gz): one note per character, 银行 as yin2 hang2
+    let melody = tmp("melody-zh.json");
+    std::fs::write(&melody, r#"{"bpm": 120, "t0": 0, "lyrics": "我爱银行，你好", "notes": [[60,1],[62,1],[64,1],[65,1],[64,1],[62,2]]}"#).unwrap();
+    let stdout = chimera(&["render", "notes", &melody, &tmp("notes-zh"), "male"]);
+    assert!(stdout.contains("6 notes"), "{stdout}");
+}
+
+#[test]
 fn render_notes_tele_records_the_live_telemetry_without_changing_the_sound() {
     let melody = tmp("tele-melody.json");
     std::fs::write(
