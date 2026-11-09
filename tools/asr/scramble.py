@@ -9,6 +9,7 @@ Score: syllable errors (Chinese: toneless pinyin; Korean: Hangul blocks) or word
 
 usage: scramble.py <outdir> [--langs zh,ko,en] [--shuffles 3] [--bodies male,female]
                    [--text lang:file]   (your own lines for one language, one line per phrase)
+                   [--melody '{"consonantScale": 1.0}']   (extra melody-file settings, for A/B)
        scramble.py --analyze <outdir>/scramble.json   (the confusions of an earlier run)
 
 Besides the error rates it reports what goes wrong: each sung line's syllables are aligned with what
@@ -30,7 +31,7 @@ import wave
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(os.path.dirname(HERE))
+REPO = os.environ.get("CHIMERA_REPO", os.path.dirname(os.path.dirname(HERE)))
 CLI = os.environ.get("CHIMERA_CLI", os.path.join(REPO, "target", "release", "chimera"))
 MODEL = os.environ.get("SENSEVOICE_DIR", os.path.expanduser("~/.cache/chimera-asr/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17"))
 
@@ -42,6 +43,7 @@ TEXTS = {
 BPM, T0 = 100.0, 0.3
 TUNE = [0, 2, 4, 7, 9, 7, 4, 2, 0, -3, 0, 2]  # a pentatonic wander, from the voice's base note
 BASE = {"male": 50, "female": 62}
+MELODY_EXTRA = {}  # --melody: extra melody-file settings (sing-planner options) for an A/B
 
 
 def units(lang, line):
@@ -83,7 +85,7 @@ def render(lines, body, stem):
         spans.append((max(0.0, start - 0.3), t + 0.15))
         notes.append([0, 1])  # a breath between lines
         t += beat
-    melody = {"bpm": BPM, "t0": T0, "lyrics": "\n".join(lines), "notes": notes}
+    melody = {"bpm": BPM, "t0": T0, "lyrics": "\n".join(lines), "notes": notes, **MELODY_EXTRA}
     with open(stem + ".json", "w") as f:
         json.dump(melody, f, ensure_ascii=False)
     subprocess.run([CLI, "render", "notes", stem + ".json", stem, body], check=True, capture_output=True)
@@ -207,8 +209,78 @@ def confusions(results, lang, keep=lambda x: x["variant"] != "real"):
     return tally, pair, wrong_ref, seen, names
 
 
+_CMU = None
+
+
+def cmu():
+    """CMUdict as the CLI reads it (public/data/cmudict.txt.gz), stress marks dropped."""
+    global _CMU
+    if _CMU is None:
+        import gzip
+        _CMU = {}
+        with gzip.open(os.path.join(REPO, "public", "data", "cmudict.txt.gz"), "rt", encoding="utf-8") as f:
+            for line in f:
+                w, _, ph = line.rstrip("\n").partition("\t")
+                _CMU[w] = [re.sub(r"\d", "", p) for p in ph.split()]
+    return _CMU
+
+
+VOWELS_ARPA = {"AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY", "IH", "IY", "OW", "OY", "UH", "UW"}
+
+
+def en_phones(text):
+    """English text → phonemes (CMUdict; words it doesn't know are skipped and counted)."""
+    out, unknown = [], 0
+    for w in re.sub(r"[^a-z' ]+", " ", text.lower()).split():
+        ph = cmu().get(w.strip("'"))
+        if ph:
+            out.extend(ph)
+        else:
+            unknown += 1
+    return out, unknown
+
+
+def en_report(results, keep=lambda x: x["variant"] != "real"):
+    from collections import Counter
+    t = Counter(); sub = Counter(); dropped = Counter(); wrong = Counter(); seen = Counter()
+    for x in results:
+        if x["lang"] != "en" or not keep(x):
+            continue
+        for ref, hyp in zip(x["ref"], x["hyp"]):
+            r, _ = en_phones(ref)
+            h, u = en_phones(hyp)
+            t["unknown words heard"] += u
+            for a, b in align(r, h[: 2 * len(r)], lambda a, b: a == b):
+                if a is None:
+                    t["inserted"] += 1
+                    continue
+                kind = "vowel" if a in VOWELS_ARPA else "consonant"
+                t[kind] += 1
+                seen[a] += 1
+                if b is None:
+                    t[kind + " dropped"] += 1
+                    dropped[a] += 1
+                    wrong[a] += 1
+                elif a != b:
+                    t[kind + " wrong"] += 1
+                    sub[(a, b)] += 1
+                    wrong[a] += 1
+    n = t["vowel"] + t["consonant"] or 1
+    errs = sum(t[k] for k in ("vowel dropped", "vowel wrong", "consonant dropped", "consonant wrong")) + t["inserted"]
+    print(f"\nen scrambled, {n} phonemes: phoneme error {errs / n:.0%}; vowels wrong {t['vowel wrong'] / max(1, t['vowel']):.0%}, "
+          f"dropped {t['vowel dropped'] / max(1, t['vowel']):.0%}; consonants wrong {t['consonant wrong'] / max(1, t['consonant']):.0%}, "
+          f"dropped {t['consonant dropped'] / max(1, t['consonant']):.0%}; inserted {t['inserted'] / n:.0%}; unknown words heard {t['unknown words heard']}")
+    worst = sorted(((wrong[p] / seen[p], p, seen[p]) for p in seen if seen[p] >= 10), reverse=True)[:10]
+    print("  most often wrong:  " + "  ".join(f"{p} {r:.0%} (of {s})" for r, p, s in worst))
+    print("  top confusions:    " + "  ".join(f"{a}→{b} ×{m}" for (a, b), m in sub.most_common(10)))
+    print("  most often dropped: " + "  ".join(f"{p} ×{m}" for p, m in dropped.most_common(10)))
+
+
 def report(results, langs):
     for lang in langs:
+        if lang == "en":
+            en_report(results)
+            continue
         c = confusions(results, lang)
         if not c:
             continue
@@ -240,6 +312,8 @@ def main():
     langs = opt("--langs", "zh,ko,en").split(",")
     shuffles = int(opt("--shuffles", "3"))
     bodies = opt("--bodies", "male,female").split(",")
+    if "--melody" in args:
+        MELODY_EXTRA.update(json.loads(opt("--melody", "{}")))
     if "--text" in args:
         lang, path = opt("--text", "").split(":", 1)
         TEXTS[lang] = [ln.strip() for ln in open(path, encoding="utf-8") if ln.strip()]
