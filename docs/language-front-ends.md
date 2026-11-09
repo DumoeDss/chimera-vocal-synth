@@ -59,14 +59,19 @@ A sung syllable per sounding note:
 
 - `onset` / `coda`: consonants and glides from the inventory. A stop or affricate may say
   `"aspirated": true|false` (unsaid: English's rule; `ʰ` and `˭` in IPA text) and `"vot"`, how long
-  its aspiration lasts in seconds (unsaid: 50 ms).
-- `nucleus`: one vowel, or a diphthong the planner knows. Falling ones (aɪ eɪ aʊ oʊ ɔɪ) hold their
-  first vowel. Rising ones (ia iɛ iɑ iʊ ua uo uɑ uə yɛ) sing a short glide on the beat, a quarter of
-  the vowel and at most 120 ms, then hold the second vowel: use them for medial glides rather than
-  putting the glide in the onset, where it's squeezed before the beat. The apical vowels ɿ (四) and ʅ
-  (是) are calibrated vowels too.
+  its aspiration lasts in seconds (unsaid: 50 ms). Any consonant may say its sung `"dur"` (s;
+  unsaid: its spoken length × 0.8): that's how a language holds its nasal codas or keeps an
+  affricate's frication short.
+- `nucleus`: one vowel, or a diphthong the planner knows. A note sings it as an on-glide, a held
+  vowel and an off-glide. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold their first vowel and glide off in
+  the note's last fifth. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing a short glide on the
+  beat, a quarter of the vowel and at most 120 ms, then hold the second vowel. Triphthongs (iaʊ
+  iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting the glide in the onset,
+  where it's squeezed before the beat with the consonants. The apical vowels ɿ (四) and ʅ (是) are
+  calibrated vowels too.
 - `pitch`: bends that colour the note's start or end, `st` semitones from the note, over `len` of the
-  vowel and at most `max` seconds. The melody stays as written.
+  vowel and at most `max` seconds. The melody stays as written. A start bend begins in the onset,
+  so a rising tone starts low rather than starting at the note and dipping.
 - `breath`: lung drive while the note sounds, relative to the phrase's (unsaid: the phrase's).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: the song's
   `nasalLead`, off by default).
@@ -153,6 +158,31 @@ dense in what each touches:
 
 The biggest wins came from the sounds the recogniser confused most: the apical vowels (是 heard as
 虚) and the medial glides (话 drifting toward 哈).
+
+### Reading what goes wrong
+
+The test also aligns each sung line's syllables with what was heard and reports the confusions:
+how often each part of a syllable is wrong (Chinese: initial, final, tone; Korean: initial, vowel,
+final) and the top confusion pairs. `--analyze <scramble.json>` re-reads a run. tools/asr/probes/
+has lines dense in one contrast each (sibilants, nasal codas, vowel-initial syllables, apical
+vowels) for `--text`.
+
+That report drove the next round, each change aimed at a named confusion (8 scrambles × 2 voices,
+cumulative, on the poems):
+
+| Change | Confusion it targeted | Scrambled |
+|---|---|---|
+| start of the round | | 43.9% |
+| nasal codas held (-ng 130 ms, -n 100 ms) | | 41.6% |
+| ʅ recalibrated (F2 1500, F3 2000) | zhi/shi heard as qu ×22 → ×8 | 40.9% |
+| iao iou uai uei as one nucleus | niao heard as yao ×16 → ×7 | 42.5% |
+| uo [uɔ], ou [əʊ] | uo/ou heard as u ×26 → 0 | 41.7% |
+| onset timing (j/zh/z short, n/m and f long) | j heard as q ×19 → ×12 | 40.0% |
+| eng [ɤŋ] | eng heard as en ×12 → ×7 | 37.8% |
+| stronger tones, start bends in the onset | rising heard as level ×44 → ×29 | **35.8%** |
+
+What's left is mostly engine-bound: -ng heard as -n (uang→uan ×16), and the sibilants (sh→f/s/ch,
+s→sh). Those live in the noise source and the nasal murmur, not the front end.
 
 Use Whisper large-v3 only on whole clips, with its transcript capped near the reference length: on
 short clips it hallucinates subtitle credits, and on whole clips it can loop. Paraformer-zh
