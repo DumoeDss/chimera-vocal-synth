@@ -26,7 +26,7 @@ fn mandarin_consonants_are_in_the_inventory() {
     }
 }
 
-const LEX: &str = "四\tsi4\n是\tshi4\n点\tdian3\n哪\tna3\n儿\ter2\n女\tnv3\n子\tzi5\n块\tkuai4\n一会儿\tyi1 hui4 er5\n天\ttian1\n你\tni3\n好\thao3\n我\two3\n不\tbu4\n会\thui4\n银\tyin2\n行\txing2\n银行\tyin2 hang2\n走\tzou3\n的\tde5\n跑\tpao3\n一\tyi1\n个\tge4\n绿\tlv4\n学\txue2\n吃\tchi1\n爱\tai4\n去\tqu4\n";
+const LEX: &str = "举\tju3\n风\tfeng1\n多\tduo1\n头\ttou2\n鸟\tniao3\n光\tguang1\n四\tsi4\n是\tshi4\n点\tdian3\n哪\tna3\n儿\ter2\n女\tnv3\n子\tzi5\n块\tkuai4\n一会儿\tyi1 hui4 er5\n天\ttian1\n你\tni3\n好\thao3\n我\two3\n不\tbu4\n会\thui4\n银\tyin2\n行\txing2\n银行\tyin2 hang2\n走\tzou3\n的\tde5\n跑\tpao3\n一\tyi1\n个\tge4\n绿\tlv4\n学\txue2\n吃\tchi1\n爱\tai4\n去\tqu4\n";
 
 fn lex() -> MandarinLexicon {
     let mut l = MandarinLexicon::new();
@@ -133,7 +133,7 @@ fn erhua_merges_into_the_syllable_before() {
     let shown = |t: &str| syls(t).iter().map(|s| format!("{}={}", s.text, ipa(s))).collect::<Vec<_>>().join(" ");
     // erhua: the syllable ends in ɻ, its -n gives way, a falling diphthong keeps its first vowel
     assert_eq!(shown("一点儿"), "一=i 点儿=t˭iɛɻ");
-    assert_eq!(shown("块儿"), "块儿=kʰwaɻ");
+    assert_eq!(shown("块儿"), "块儿=kʰuaɻ"); // uai → ua + ɻ (the off-glide gives way, the on-glide stays)
     assert_eq!(shown("哪儿"), "哪儿=naɻ");
     assert_eq!(shown("一会儿"), "一=i 会儿=xweɻ");
     // 儿 as a word's own syllable
@@ -142,4 +142,20 @@ fn erhua_merges_into_the_syllable_before() {
     // pinyin's r
     let p: Vec<String> = typed("nǎr yìdiǎnr").into_iter().map(|x| x.1).collect();
     assert_eq!(p, ["naɻ", "i", "t˭iɛɻ"]);
+}
+
+#[test]
+fn mandarin_timing_and_vowels() {
+    let s = syls("光天你风举");
+    let dur = |segs: &[chimera::phonetics::Segment]| segs.iter().map(|x| x.dur).collect::<Vec<_>>();
+    // nasal codas held long enough to tell -n from -ng
+    assert_eq!(dur(&s[0].coda), [Some(0.13)]);
+    assert_eq!(dur(&s[1].coda), [Some(0.10)]);
+    // nasal onsets and f longer; an unaspirated affricate's frication shorter
+    assert_eq!(s[2].onset[0].dur, Some(0.09));
+    assert_eq!(s[3].onset[0].dur, Some(0.13));
+    assert_eq!(s[4].onset[0].dur, Some(0.08));
+    // Mandarin's own vowels: eng back [ɤŋ], uo open [uɔ], ou central [əʊ], iao one three-part nucleus
+    let n: Vec<String> = syls("风多头鸟").iter().map(|s| s.nucleus.ipa.clone()).collect();
+    assert_eq!(n, ["ɤ", "uɔ", "əʊ", "iaʊ"]);
 }

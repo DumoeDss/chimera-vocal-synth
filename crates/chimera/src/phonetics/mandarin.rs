@@ -139,9 +139,9 @@ fn third_tones(py: &mut [String]) {
 pub fn tone_bends(tone: u8) -> Vec<Bend> {
     let b = |at, len, max, st| Bend { at, len, max, st };
     match tone {
-        2 => vec![b(Edge::Start, 0.35, 0.15, -2.0)],
-        3 => vec![b(Edge::Start, 0.49, 0.21, -3.0)],
-        4 => vec![b(Edge::Start, 0.21, 0.09, 1.0), b(Edge::End, 0.35, 0.15, -3.0)],
+        2 => vec![b(Edge::Start, 0.45, 0.25, -3.5)],
+        3 => vec![b(Edge::Start, 0.55, 0.3, -4.0)],
+        4 => vec![b(Edge::Start, 0.25, 0.12, 1.5), b(Edge::End, 0.4, 0.2, -4.0)],
         _ => vec![],
     }
 }
@@ -149,6 +149,28 @@ pub fn tone_bends(tone: u8) -> Vec<Bend> {
 
 /// Fraction of a vowel nasalised before -n/-ng.
 const NASAL_LEAD: f64 = 0.4;
+
+/// Mandarin's sung timing: nasal codas held long enough to tell -n from -ng (the place cue is in
+/// the vowel's last formant movement and the murmur; at the default ~60 ms they read as one).
+fn coda_dur(ipa: &str) -> Option<f64> {
+    match ipa {
+        "ŋ" => Some(0.13),
+        "n" => Some(0.10),
+        _ => None,
+    }
+}
+
+/// Mandarin's sung onset timing, where the defaults blurred contrasts: an unaspirated affricate's
+/// frication short (j heard as q), nasal onsets long enough to hear (n heard as y), f long enough
+/// to tell from sh.
+fn onset_dur(ipa: &str, aspirated: Option<bool>) -> Option<f64> {
+    match (ipa, aspirated) {
+        ("tɕ" | "tʂ" | "ts", Some(false)) => Some(0.08),
+        ("n" | "m", _) => Some(0.09),
+        ("f", _) => Some(0.13),
+        _ => None,
+    }
+}
 
 /// Aspiration length of Mandarin's aspirated stops and affricates (s).
 const MANDARIN_VOT: f64 = 0.09;
@@ -186,7 +208,7 @@ fn final_parts(f: &str) -> Option<(&'static [&'static str], &'static str, &'stat
     const N: &[&str] = &[];
     Some(match f {
         "a" => (N, "a", N),
-        "o" => (&["w"], "o", N),
+        "o" => (&["w"], "ɔ", N),
         "e" => (N, "ɤ", N),
         "i" => (N, "i", N),
         "u" => (N, "u", N),
@@ -195,23 +217,23 @@ fn final_parts(f: &str) -> Option<(&'static [&'static str], &'static str, &'stat
         "ai" => (N, "aɪ", N),
         "ei" => (N, "eɪ", N),
         "ao" => (N, "aʊ", N),
-        "ou" => (N, "oʊ", N),
+        "ou" => (N, "əʊ", N),
         "an" => (N, "a", &["n"]),
         "en" => (N, "ə", &["n"]),
         "ang" => (N, "ɑ", &["ŋ"]),
-        "eng" => (N, "ə", &["ŋ"]),
+        "eng" => (N, "ɤ", &["ŋ"]),
         "ong" => (N, "ʊ", &["ŋ"]),
         "ia" => (&["j"], "a", N),
         "ie" => (&["j"], "ɛ", N),
         "iao" => (&["j"], "aʊ", N),
-        "iu" | "iou" => (&["j"], "oʊ", N),
+        "iu" | "iou" => (&["j"], "əʊ", N),
         "ian" => (&["j"], "ɛ", &["n"]),
         "in" => (N, "i", &["n"]),
         "iang" => (&["j"], "ɑ", &["ŋ"]),
         "ing" => (N, "i", &["ŋ"]),
         "iong" => (&["j"], "ʊ", &["ŋ"]),
         "ua" => (&["w"], "a", N),
-        "uo" => (&["w"], "o", N),
+        "uo" => (&["w"], "ɔ", N),
         "uai" => (&["w"], "aɪ", N),
         "ui" | "uei" => (&["w"], "eɪ", N),
         "uan" => (&["w"], "a", &["n"]),
@@ -275,7 +297,6 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         nucleus = "ə";
     }
     // a medial glide belongs to the rhyme: glide + vowel as one rising diphthong, sung on the beat
-    // (the three-vowel finals iao, iou, uai, uei keep the glide as an onset)
     let mut glide = glide;
     let rising = match (glide, nucleus) {
         (["j"], "a") => Some("ia"),
@@ -283,10 +304,15 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         (["j"], "ɑ") => Some("iɑ"),
         (["j"], "ʊ") => Some("iʊ"),
         (["w"], "a") => Some("ua"),
-        (["w"], "o") => Some("uo"),
+        (["w"], "ɔ") => Some("uɔ"),
         (["w"], "ɑ") => Some("uɑ"),
         (["w"], "ə") => Some("uə"),
         (["ɥ"], "ɛ") => Some("yɛ"),
+        // the three-vowel finals: the glide into a falling diphthong (iao, iou, uai, uei)
+        (["j"], "aʊ") => Some("iaʊ"),
+        (["j"], "əʊ") => Some("iəʊ"),
+        (["w"], "aɪ") => Some("uaɪ"),
+        (["w"], "eɪ") => Some("ueɪ"),
         _ => None,
     };
     if let Some(r) = rising {
@@ -302,14 +328,14 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
     if let Some((ipa, aspirated)) = initial(ini) {
         // Mandarin's aspirated stops and affricates aspirate for ~80-100 ms, longer than English's
         let vot = (aspirated == Some(true)).then_some(MANDARIN_VOT);
-        onset.push(Segment { aspirated, vot, ..Segment::new(ipa) });
+        onset.push(Segment { aspirated, vot, dur: onset_dur(ipa, aspirated), ..Segment::new(ipa) });
     }
     onset.extend(glide.iter().map(|g| Segment::new(g)));
     Some(Syllable {
         text: text.to_string(),
         onset,
         nucleus: Segment::new(nucleus),
-        coda: coda.iter().map(|c| Segment::new(c)).collect(),
+        coda: coda.iter().map(|c| Segment { dur: coda_dur(c), ..Segment::new(c) }).collect(),
         pitch: tone_bends(t),
         // vowels before -n/-ng are nasalised. (Lighter neutral tones, breath 0.7 on 的 了, sounded
         // more natural but made them harder to recognise in the scramble test, so they stay full.)
@@ -326,8 +352,22 @@ const ER_SYLLABLE_AFTER: &str = "女婴孤幼男健宠胎孙侄托";
 /// Erhua: the syllable ends rhotic instead (一点儿 diǎnr, 哪儿 nǎr). A nasal coda gives way to
 /// the r, and a falling diphthong keeps its first vowel (块儿 kuàir → [kʰwaɻ]).
 fn rhotacize(s: &mut Syllable) {
-    if let Some((a, _)) = super::planner::diphthong_parts(&s.nucleus.ipa).filter(|_| !super::planner::is_rising(&s.nucleus.ipa)) {
-        s.nucleus = Segment::new(a);
+    // the off-glide gives way to the r: aɪ → a, uaɪ → ua (a rising nucleus keeps its on-glide)
+    let nuc = s.nucleus.ipa.clone();
+    if super::planner::offglide(&nuc).is_some() {
+        let held = super::planner::held_vowel(&nuc);
+        let rising = super::planner::onglide(&nuc).map(|g| format!("{g}{held}"));
+        match rising {
+            // glide + vowel as a rising diphthong the planner knows (uai → ua)
+            Some(r) if super::planner::is_rising(&r) => s.nucleus = Segment::new(&r),
+            // otherwise the glide goes back to the onset (uei → w + e)
+            Some(_) => {
+                let g = super::planner::onglide(&nuc).unwrap();
+                s.onset.push(Segment::new(match g { "i" => "j", "y" => "ɥ", _ => "w" }));
+                s.nucleus = Segment::new(held);
+            }
+            None => s.nucleus = Segment::new(held),
+        }
     }
     s.coda = vec![Segment::new("ɻ")];
     s.nasal_lead = None;
