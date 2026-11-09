@@ -484,7 +484,9 @@ fn render_tracked(v: &mut HumanVoice, out: &mut [f32], artic: bool, tele: bool) 
 /// `render notes <in.json> <out> [body] [--artic tracks.json] [--tele voice.tele]`: `--artic` also
 /// writes the articulators over time (`{"rate", "body", "keys", "frames"}`), to animate a face in
 /// sync; `--tele` writes the voice's whole telemetry over time (see `TeleRecorder`), which the
-/// app's duet page replays on a 3D head.
+/// app's duet page replays on a 3D head. The melody file may give `"syllables"` (IPA
+/// onset/nucleus/coda per sounding note) instead of English `"lyrics"`: a language front end's
+/// output (docs/language-front-ends.md).
 pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let mut artic_out: Option<String> = None;
     let mut tele_out: Option<String> = None;
@@ -509,8 +511,14 @@ pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let bpm = j["bpm"].as_f64().ok_or("bpm missing")?;
     let vibrato = j["vibrato"].as_f64().unwrap_or(35.0);
     let raw: Vec<[f64; 2]> = serde_json::from_value(j["notes"].clone()).map_err(|e| format!("notes: {e}"))?;
-    let g = g2p()?;
-    let syl = lyrics_to_syllables(j["lyrics"].as_str().ok_or("lyrics missing")?, &g);
+    // "syllables" sing what a language front end wrote; otherwise the lyrics go through the
+    // English front end (the pronouncing dictionary)
+    let syl: Vec<Syllable> = if j.get("syllables").is_some() {
+        serde_json::from_value(j["syllables"].clone()).map_err(|e| format!("syllables: {e}"))?
+    } else {
+        let g = g2p()?;
+        lyrics_to_syllables(j["lyrics"].as_str().ok_or("lyrics missing")?, &g)
+    };
     let sounding = raw.iter().filter(|n| n[0] > 0.0).count();
     if syl.len() != sounding {
         return Err(format!("{} syllables for {sounding} notes: {}", syl.len(),

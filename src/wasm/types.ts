@@ -236,6 +236,8 @@ export interface DemoSong {
   lyrics: string;
   notes: [number, number][];
   octave: { male: number; female: number; child: number };
+  /** sung syllables from a language front end (IPA), used instead of reading the lyrics as English */
+  syllables?: Syllable[];
 }
 
 export interface VowelRef {
