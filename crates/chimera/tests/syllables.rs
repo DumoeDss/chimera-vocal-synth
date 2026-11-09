@@ -56,21 +56,23 @@ fn lyrics_words_melisma_phrase_ends_unreduced_function_words() {
     assert!(syl[1].word_end && !syl[0].word_end);
 }
 
-/// Each syllable as onset+nucleus+coda IPA, joined with "."
+/// Each syllable as onset+nucleus+coda IPA, joined with "."; a stop's aspiration, when its front end
+/// decides it, as ʰ (aspirated) or ˭ (unaspirated)
 fn sung(text: &str) -> String {
-    lyrics_to_syllables(text, &word).iter().map(|s| format!("{}{}{}", ipa(&s.onset), s.nucleus.ipa, ipa(&s.coda))).collect::<Vec<_>>().join(".")
+    let marked = |segs: &[Segment]| segs.iter().map(|s| format!("{}{}", s.ipa, match s.aspirated { Some(true) => "ʰ", Some(false) => "˭", None => "" })).collect::<String>();
+    lyrics_to_syllables(text, &word).iter().map(|s| format!("{}{}{}", marked(&s.onset), s.nucleus.ipa, marked(&s.coda))).collect::<Vec<_>>().join(".")
 }
 
 #[test]
 fn hangul_sings_one_syllable_per_block_with_korean_sound_rules() {
-    assert_eq!(sung("빵야"), "baŋ.ja"); // ㅇ coda stays; tense ㅃ sings unaspirated
+    assert_eq!(sung("빵야"), "p˭aŋ.ja"); // ㅇ coda stays; tense ㅃ is voiceless and unaspirated
     assert_eq!(sung("먹어"), "mʌ.gʌ"); // a coda moves onto a silent ㅇ, voiced between vowels
-    assert_eq!(sung("좋아"), "tʃo.a"); // ㅎ drops before a vowel
-    assert_eq!(sung("좋다"), "tʃo.ta"); // ㅎ + ㄷ aspirates
+    assert_eq!(sung("좋아"), "tɕo.a"); // ㅎ drops before a vowel; ㅈ is alveolo-palatal
+    assert_eq!(sung("좋다"), "tɕo.tʰa"); // ㅎ + ㄷ aspirates
     assert_eq!(sung("국물"), "kuŋ.mul"); // nasalisation
-    assert_eq!(sung("신라"), "ʃil.la"); // ㄴ + ㄹ is [ll]; ㅅ before i is [ʃ]
+    assert_eq!(sung("신라"), "ɕil.la"); // ㄴ + ㄹ is [ll]; ㅅ before i is [ɕ]
     assert_eq!(sung("없는"), "ʌm.nɯn"); // a two-letter coda simplifies, then nasalises
-    assert_eq!(sung("학교"), "hak.gjo"); // tensing after an obstruent coda
+    assert_eq!(sung("학교"), "hak.k˭jo"); // tensing after an obstruent coda
     assert_eq!(sung("사랑해"), "sa.ɾaŋ.ɦɛ");
     assert_eq!(sung("닭"), "tak");
     assert_eq!(sung("의사"), "ɰi.sa");
