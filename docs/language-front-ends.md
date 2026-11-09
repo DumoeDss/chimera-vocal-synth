@@ -201,6 +201,17 @@ Both are now the planner's defaults; a live keyboard note keeps short consonants
 English still gets wrong: AH heard as ER (her, were), AA as AH/AE, DH as L, and SH/S as F: the same
 weak sibilant noise as Mandarin's sh→f.
 
+Score-level tries at -n/-ng, none kept (nasal probe, 8 scrambles × 2 voices; baseline 59.2 / 52.1%,
+finals wrong 31%, in→ing ×28, ing→in ×18):
+- **A phrase-final nasal fading out closed** (no oral release while voiced): 64.6 / 52.1%, in→ing
+  ×35. The release, though unnatural, carries place.
+- **ing as [iəŋ]:** ing→in ×18 → ×6, but heard as ian ×18 instead; 58.8 / 51.7%.
+- **The tongue backing toward the velum in ing's vowel** (TbX 3.0): 60.4 / 51.7%.
+- **No tongue-body fronting during a coda -n:** 60.4 / 52.9%.
+
+All within the test's noise. On this probe the real lyrics also come back 57–60% wrong: in/ing may
+be near what this recogniser separates in singing.
+
 Use Whisper large-v3 only on whole clips, with its transcript capped near the reference length: on
 short clips it hallucinates subtitle credits, and on whole clips it can loop. Paraformer-zh
 recognised nothing in any sung render.
