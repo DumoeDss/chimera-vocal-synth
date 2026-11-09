@@ -33,6 +33,11 @@ pub struct Segment {
     /// word boundary after this segment
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub word_end: Option<bool>,
+    /// a voiceless stop or affricate's aspiration, as its front end decides it (Mandarin and Korean
+    /// contrast it); None: the planner's default, English's rule (aspirated syllable-initially
+    /// before a vowel, not after /s/)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aspirated: Option<bool>,
 }
 
 impl Segment {
