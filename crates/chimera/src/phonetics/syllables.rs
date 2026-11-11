@@ -6,11 +6,12 @@
 //! English words come from the pronouncing dictionary (unreduced: sung function words keep full
 //! vowels), are split into syllables by the maximal-onset principle with English onset clusters,
 //! and the spelling is split to match for display ("twin-kle"). Hangul words go to
-//! [`super::korean`], one syllable per block. Typed hyphens force syllable breaks; a lone "-" (or
+//! [`super::korean`], one syllable per block; kana go to [`super::japanese`], one per mora. Typed hyphens force syllable breaks; a lone "-" (or
 //! "~") holds the previous vowel onto the next note (melisma), as in vocaloid editors.
 
 use crate::anatomy::human::BodyMix;
 use super::english::js_is_space;
+use super::japanese::Japanese;
 use super::korean::Korean;
 use super::mandarin::Pinyin;
 use super::planner::is_vowel;
@@ -282,7 +283,7 @@ pub fn read_lyrics(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Syllable> {
 
 /// Lyrics text → syllables through the built-in front ends that need no data beyond the English
 /// dictionary: pinyin (only words with tones; before English, which shares its alphabet), English
-/// (`g2p`) and Korean.
+/// (`g2p`), Korean and Japanese (kana).
 pub fn lyrics_to_syllables(text: &str, g2p: &impl WordSource) -> Vec<Syllable> {
-    read_lyrics(text, &[&Pinyin, &English(g2p), &Korean])
+    read_lyrics(text, &[&Pinyin, &English(g2p), &Korean, &Japanese])
 }

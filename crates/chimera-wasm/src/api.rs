@@ -12,6 +12,7 @@ use chimera::phonetics::beatbox::{self, BeatStep};
 use chimera::phonetics::planner::{self, PhraseInput, PlanOptions};
 use chimera::phonetics::sing::{self, MelismaOptions, NoteOnOptions, SongOptions, SungNote};
 use chimera::phonetics::english::EnglishG2P;
+use chimera::phonetics::japanese::Japanese;
 use chimera::phonetics::korean::Korean;
 use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin};
 use chimera::phonetics::syllables::{English, read_lyrics};
@@ -133,8 +134,8 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
             st.mandarin.load(&arg::<String>(req, "text")?);
             Ok(json!(true))
         }
-        // every built-in front end: pinyin, English, Korean, and Mandarin once its lexicon is loaded
-        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&Pinyin, &English(&st.g2p), &Korean, &Mandarin(&st.mandarin)])),
+        // every built-in front end: pinyin, English, Korean, Japanese, and Mandarin once its lexicon is loaded
+        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&Pinyin, &English(&st.g2p), &Korean, &Japanese, &Mandarin(&st.mandarin)])),
         // ---------------------------------------------------------------- creatures
         "creaturePreview" => {
             let id: String = arg(req, "id")?;

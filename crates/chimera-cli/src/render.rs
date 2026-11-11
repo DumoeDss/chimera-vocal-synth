@@ -22,6 +22,7 @@ use chimera::phonetics::sing::{
     plan_song,
 };
 use chimera::phonetics::songs::DEMO_SONGS;
+use chimera::phonetics::japanese::Japanese;
 use chimera::phonetics::korean::Korean;
 use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin, is_han};
 use chimera::phonetics::syllables::{English, lyrics_to_syllables, read_lyrics};
@@ -65,7 +66,7 @@ pub fn zh() -> Result<MandarinLexicon, String> {
 pub fn sung_lyrics(text: &str) -> Result<Vec<Syllable>, String> {
     let g = g2p()?;
     let lex = if text.chars().any(is_han) { zh()? } else { MandarinLexicon::new() };
-    Ok(read_lyrics(text, &[&Pinyin, &English(&g), &Korean, &Mandarin(&lex)]))
+    Ok(read_lyrics(text, &[&Pinyin, &English(&g), &Korean, &Japanese, &Mandarin(&lex)]))
 }
 
 /// `name.toLowerCase().replace(/[^a-z]+/g, "-")`
