@@ -87,8 +87,9 @@ fn output_does_not_depend_on_the_host_block_size() {
 }
 
 /// A held "ah" from the start button: two seconds at this output rate, its RMS over the second.
-fn held_voice_rms(fs: f64) -> f64 {
+fn held_voice_rms(fs: f64, body: BodyName) -> f64 {
     let mut e = Engine::new(fs);
+    e.set_body(body);
     e.set_gate(1.0);
     let mut out = vec![0.0f32; 2 * fs as usize];
     for chunk in out.chunks_mut(128) {
@@ -104,12 +105,23 @@ fn the_voice_holds_at_a_bluetooth_headsets_sample_rate() {
     // Issue #33: the browser's context runs at the output device's rate. 2x oversampling put a
     // 16 kHz device's airway at 32 kHz, below its stable rate: NaN within a second, then silence.
     // 24 kHz ran at the limiter ceiling. Each rate now sounds like 48 kHz does.
-    let reference = held_voice_rms(48000.0);
+    let reference = held_voice_rms(48000.0, BodyName::Male);
     for fs in [8000.0, 16000.0, 22050.0, 24000.0, 32000.0] {
-        let rms = held_voice_rms(fs);
+        let rms = held_voice_rms(fs, BodyName::Male);
         assert!(rms > 0.5 * reference && rms < 2.0 * reference, "{fs} Hz: RMS {rms:.3}, 48 kHz {reference:.3}");
     }
     // the usual rates simulate as before (the golden fixtures stand)
     use chimera::voice::human_voice::oversample_for;
     assert_eq!([44100.0, 48000.0, 60000.0, 88200.0, 96000.0].map(oversample_for), [2, 2, 2, 1, 1]);
+}
+
+#[test]
+fn the_voice_holds_for_a_child_at_low_device_rates() {
+    // A 16 or 32 kHz device runs the airway at 64 kHz, where the child's 1.5 cm piriform fossa,
+    // three sections, had 0.49 cm sections: Courant number 1.09. The voice rang 2.8-3.5x loud.
+    let reference = held_voice_rms(48000.0, BodyName::Child);
+    for fs in [8000.0, 16000.0, 22050.0, 32000.0] {
+        let rms = held_voice_rms(fs, BodyName::Child);
+        assert!(rms > 0.67 * reference && rms < 1.5 * reference, "child at {fs} Hz: RMS {rms:.3}, 48 kHz {reference:.3}");
+    }
 }

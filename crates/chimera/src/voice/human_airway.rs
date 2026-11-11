@@ -99,7 +99,10 @@ impl HumanAirway {
             })
             .collect();
         let nasal = net.add_tube(TubeSpec::new("nasal", n_na, na_len, Area::Profile(na_areas)).wall(Some(WALL_NASAL)).perimeter(3.2).viscous(2.5));
-        let fossa = net.add_tube(TubeSpec::new("piriform", 3, 2.0 * k, Area::Uniform(0.9 * k * k)).wall(Some(WALL_SOFT)).perimeter(1.3));
+        // three sections where they fit the time step: a child's 1.5 cm fossa in a 64 kHz airway
+        // (a 16 or 32 kHz device) had 0.49 cm sections, Courant number 1.09, and the voice rang 3x loud
+        let n_fo = js_max(1.0, js_min(3.0, (2.0 * k / dx_min).floor())) as usize;
+        let fossa = net.add_tube(TubeSpec::new("piriform", n_fo, 2.0 * k, Area::Uniform(0.9 * k * k)).wall(Some(WALL_SOFT)).perimeter(1.3));
 
         let lungs = net.add_pressure_node("lungs");
         let tr_a = 2.5 * k * k;
