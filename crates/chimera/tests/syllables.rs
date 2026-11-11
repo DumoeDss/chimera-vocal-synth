@@ -118,6 +118,15 @@ fn lax_and_aspirated_stops_plan_different_aspiration() {
 }
 
 #[test]
+fn text_after_a_letter_no_front_end_reads_is_kept() {
+    // accented Latin letters aren't English's: they are skipped, the rest of the word still sings
+    // (as before the router). A front end must never swallow what follows.
+    let g2p = chimera::phonetics::english::EnglishG2P::new(); // letter-to-sound: reads any word
+    let texts: Vec<String> = lyrics_to_syllables("Zürich über", &g2p).into_iter().map(|s| s.text).collect();
+    assert!(texts.iter().any(|t| t == "rich") && texts.iter().any(|t| t == "ber"), "{texts:?}");
+}
+
+#[test]
 fn hangul_keeps_its_spelling_and_mixes_with_english() {
     let syls = lyrics_to_syllables("twinkle 빵야 빵야, star", &word);
     let shown: Vec<(&str, bool, bool)> = syls.iter().map(|s| (s.text.as_str(), s.word_end, s.phrase_end)).collect();

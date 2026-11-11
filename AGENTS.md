@@ -25,7 +25,7 @@ and the CLI) under a React UI. See the README.
 - `tests/`: bun tests on the wasm build. `tools/`: e2e, layout lint, spectrogram, speech judges
   (`asr/` Whisper, `tsp/` the real speakers' data).
 - `docs/`: architecture, the engine contract (`rust-engine.md`), the UI look, the singer and
-  speech judges, and the hill-climb rules.
+  speech judges, the hill-climb rules, and how a language plugs in (`language-front-ends.md`).
 
 ## Rules
 
