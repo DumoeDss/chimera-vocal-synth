@@ -9,6 +9,7 @@ lyrics ──► router ──► FRONT END ──► syllables ──► BACK E
                         Japanese: kana rules
                         Mandarin: pinyin lexicon
                         Pinyin: typed tones
+                        IPA: words between slashes
                         explicit syllables pass through
 ```
 
@@ -24,6 +25,7 @@ one exception: it is still the planner's default when a front end says nothing.
 | Latin | English | CMUdict (letter-to-sound until it loads) | `phonetics/english.rs`, `syllables.rs` |
 | Hangul | Korean | nothing: the block's letters are its sounds | `phonetics/korean.rs` |
 | Kana | Japanese | nothing: the kana are their sounds | `phonetics/japanese.rs` |
+| IPA in `/slashes/` | IPA | nothing: the IPA is the sounds, split by sonority | `phonetics/ipa_lyrics.rs` |
 | Han | Mandarin | `public/data/mandarin.txt.gz` (208 KB, loaded when lyrics have Han characters) | `phonetics/mandarin.rs` |
 | Latin with tones | Mandarin as pinyin | nothing (checked against Mandarin's 411 syllables) | `phonetics/mandarin.rs` (`Pinyin`) |
 
@@ -33,7 +35,8 @@ melisma marks (`-`, `~`), phrase punctuation (ASCII and full-width `，。！？
 lyrics in Sing mode, a melody file's `"lyrics"`, or a duet show's melody files.
 
 Japanese is typed in kana (hiragana, katakana, half-width katakana), one note per mora: `さくら`,
-`コーヒー`, `きょう`. It is its own section below; kanji are not read.
+`コーヒー`, `きょう`. It is its own section below; kanji are not read. Any other language is typed
+as IPA between slashes: `/ˈʃtʁaːsə/` (see "IPA lyrics").
 
 Pinyin and English share the Latin alphabet, so a front end may decline a word it scanned. Pinyin
 claims only a word that carries tones and parses fully into real syllables:
@@ -79,6 +82,54 @@ is the kana as typed; a small ゃゅょ or small vowel joins the kana before it 
 - Iteration marks (ゝ ゞ) repeat the kana before them; ・ separates words.
 - **Not yet checked** with the scramble test or by a native speaker.
 
+## IPA lyrics
+
+`phonetics/ipa_lyrics.rs`. A word between slashes is IPA, in Sing, `chimera syllables`, `render notes`
+and duet melody files, mixed freely with the other front ends: `さくら /ˈʃøːn/ hello`. Everything up to
+the closing slash on the same line is one word; a space inside it starts another (`/ˈhɛ loʊ/`). An
+unclosed slash is dropped.
+- **Syllables, with no onset table.** Every vowel or diphthong the planner knows is a nucleus.
+  Consonants before the first are its onset and after the last its coda (`/ˈpsixa/` and `/ˈmnɛ/` keep
+  their clusters). Between two nuclei the longest run of consonants at the end whose sonority rises
+  goes to the next syllable, and the rest closes the previous one; sonority is the inventory's manner
+  (stop, affricate < fricative < nasal < liquid < approximant). So `/ˈɡɾasjas/` is `ɡɾa.sjas`,
+  `/ˈasta/` is `as.ta`, and `/ˈtʃaːo/` is `tʃaː.o`. This is a rule, not a language: write a `.` where
+  a language says otherwise (`/ˈa.spa/`). `,` and `|` break too. Stress marks do not move a break
+  (eSpeak NG puts them before the vowel, the IPA convention before the syllable).
+- **Marks:** stress `ˈ ˌ`, length `ː`, tie bars, and `ʰ` / `˭` for aspiration. IPA lyrics are
+  narrow transcription: an unmarked voiceless stop or affricate is unaspirated, so `/pa/` and `/pʰa/`
+  contrast, instead of English's positional rule deciding. A note's text is the syllable's IPA as the
+  engine read it (tie bars gone, `ɡ` shown as `g`).
+- **Nothing is dropped silently.** The engine has no nasal vowels, no devoicing, no `ʏ` or `ɜ`, and the
+  tokenizer drops what it doesn't know. `chimera syllables` and `render notes` print a warning on
+  stderr naming the symbols it doesn't know, the symbols it has no sound for, the combining marks it
+  ignores (`ɔ̃` is sung `ɔ`) and the words with no vowel (not sung). In code, `unknown_ipa`,
+  `ignored_ipa_marks` and `ipa_lyric_report` (the crate), `sung_symbols` for what can be written.
+  Sing mode does not show these yet.
+
+### A language without a front end
+
+`tools/text-to-ipa.ts` turns text into such a line with an eSpeak NG you install yourself:
+
+```
+bun tools/text-to-ipa.ts --voice de "Wie schön leuchtet der Morgenstern"   # /…/ /…/ …, for Sing or "lyrics"
+bun tools/text-to-ipa.ts --voice de --json "…"                              # the "syllables" array instead
+bun tools/text-to-ipa.ts --ipa "ˈʃøːn bɔ̃ʒuʁ"                               # IPA from any other G2P, no eSpeak
+```
+
+eSpeak NG is GPL-3.0 and large, so it is not bundled, not a dependency and not imported: the script
+runs the `espeak-ng` on your PATH (or `--espeak <path>`), and says how to get one when it is missing.
+It cleans what eSpeak writes: language-switch annotations, joiners and tie bars go; symbols the engine
+can't sing become the nearest it can through one table (`ʏ` → `y`, `ɔʏ` → `ɔɪ`, `ɐ̯` → `ɐ`, ...), a
+mark the engine doesn't model is dropped from its letter, and every change is printed on stderr. No
+sung symbol is ever stripped (`ç` stays `ç`). The engine's list of sounds is read from the wasm build
+(`bun run wasm`), so the table cannot drift: its test fails when the engine gains a sound an entry
+replaces.
+
+**Not tested with a real eSpeak NG:** the cleaner follows eSpeak's documented `--ipa` output and its
+tests use hand-written examples of that format. Check the first lines you make, and what the stderr
+report says was changed. The nearest-sound choices are guesses, not a native speaker's.
+
 ## The one format
 
 A sung syllable per sounding note:
@@ -113,7 +164,7 @@ A sung syllable per sounding note:
 Every front end's output can be frozen to JSON and edited, then sung with `"syllables"` instead of
 `"lyrics"`. This works in `render notes`, `DemoSong.syllables` and duet melody files. Use it to
 fix a reading by hand (了 as *liǎo* instead of *le*), or to sing a language before it has a front
-end.
+end (`tools/text-to-ipa.ts --json` writes one).
 
 ## Adding a language
 
