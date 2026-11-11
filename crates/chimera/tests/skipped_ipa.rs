@@ -15,7 +15,7 @@ fn empty_and_all_known_input_report_nothing() {
     assert!(skipped_ipa("   ").is_empty());
     let r = skipped_ipa("ˈpʰaː.tɑ, bɑ|dɑ t͡ʃa");
     assert!(r.is_empty(), "{r:?}");
-    assert!(skipped_ipa("ˈɑpɑ / ˈɑbɑ").unknown == strs(&["/"]));
+    assert!(skipped_ipa("ˈɑpɑ / ˈɑbɑ").is_empty());
 }
 
 #[test]
@@ -29,6 +29,19 @@ fn unknown_symbols_are_reported_the_owners_example() {
     assert!(r.no_sound.is_empty() && r.ignored_marks.is_empty(), "{r:?}");
     // a capital, a digit, a click, a typo
     assert_eq!(skipped_ipa("Ab2ǃ").unknown, strs(&["A", "2", "ǃ"]));
+}
+
+#[test]
+fn transcription_delimiters_are_structure() {
+    // what people paste from Wiktionary: /phonemic/ and [phonetic]; only the real gaps are named
+    let bare = skipped_ipa("ɕiɛ˥˩");
+    assert!(bare.unknown.iter().any(|s| s == "˥") && bare.unknown.iter().any(|s| s == "˩"));
+    assert_eq!(skipped_ipa("/ɕiɛ/"), skipped_ipa("ɕiɛ"));
+    assert_eq!(skipped_ipa("[ɕiɛ˥˩]"), bare);
+    assert_eq!(skipped_ipa("/ɕiɛ˥˩/ [ɕiɛ˥˩]"), bare);
+    // anything else stays as it was: parentheses and the like are reported
+    assert_eq!(skipped_ipa("/a(b)/").unknown, strs(&["(", ")"]));
+    assert!(skipped_ipa("/ˈhɛlo/ [ˈhɛlo]").is_empty());
 }
 
 #[test]

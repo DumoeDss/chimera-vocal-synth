@@ -41,6 +41,10 @@ describe("the Speak notice", () => {
     expect(skippedLines("haɪ. ðɛə? goʊ! bɑ | dɑ")).toEqual([]);
   });
 
+  test("the delimiters of /phonemic/ and [phonetic] IPA are not listed", () => {
+    for (const t of ["/a˥/", "[a˥]"]) expect(skippedLines(t).map(skippedText)).toEqual(["Not said: ˥ (not symbols this voice knows)"]);
+  });
+
   test("one line per kind, in plain words", () => {
     const lines = skippedLines("a˥ n̥");
     expect(lines.map(skippedText)).toEqual(["Not said: ˥ (not symbols this voice knows)", "Said without the mark: n̥ (this voice can't make that mark there)"]);

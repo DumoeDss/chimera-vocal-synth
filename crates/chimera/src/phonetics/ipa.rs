@@ -122,8 +122,8 @@ fn has_sound(sym: &str) -> bool {
 /// added), and marks it does not model or cannot apply (the letter is said, the mark is not).
 ///
 /// The marks `tokenize_ipa` reads (`ʰ ˭`, a tilde or diaeresis below on a vowel, `ʲ`, `ʱ` where
-/// they apply), stress, length, tie bars, spaces and `. , |` are not reported, and neither is
-/// whitespace of other kinds. `tokenize_ipa` itself is unchanged and still drops these silently,
+/// they apply), stress, length, tie bars, spaces and `. , |` are not reported, and neither are
+/// whitespace of other kinds and the transcription delimiters `/ [ ]` (`/ɕiɛ/`, `[ɕiɛ]`). `tokenize_ipa` itself is unchanged and still drops these silently,
 /// so a caller that takes IPA from a person should show this.
 pub fn skipped_ipa(input: &str) -> SkippedIpa {
     let mut g = Gaps::default();
@@ -244,7 +244,8 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             i += 1;
         }
         if !known.contains(tok.as_str()) {
-            if !tok.chars().all(char::is_whitespace) {
+            // whitespace and the delimiters IPA is written between (/phonemic/, [phonetic]) are structure
+            if !tok.chars().all(|c| c.is_whitespace() || matches!(c, '/' | '[' | ']')) {
                 add(&mut gaps.unknown, shown(&tok));
             }
             continue;

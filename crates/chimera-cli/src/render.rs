@@ -93,8 +93,8 @@ pub fn speech(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let mut marks: Vec<(f64, String)> = Vec::new();
     let mut t0 = 0.05;
     // what the engine will not say as typed, one warning line per kind on stderr (the render is unchanged)
-    let utterances: Vec<&str> = text.split('/').map(str::trim).filter(|u| !u.is_empty()).collect();
-    for line in skipped_ipa(&utterances.join(" | ")).warnings() {
+    // (the "/" between utterances is a transcription delimiter, which skipped_ipa does not report)
+    for line in skipped_ipa(&text).warnings() {
         eprintln!("warning: {line}");
     }
     for u in text.split('/').map(str::trim).filter(|u| !u.is_empty()) {
