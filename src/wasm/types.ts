@@ -161,6 +161,8 @@ export interface Segment {
   nasalized?: boolean;
   /** a consonant with a secondary palatal gesture, the tongue body raised and fronted (IPA ʲ) */
   palatalized?: boolean;
+  /** breathy voice: a voiced stop or affricate's release (IPA ʱ), or a vowel (combining diaeresis below) */
+  breathy?: boolean;
 }
 
 export interface PlannedSegment {

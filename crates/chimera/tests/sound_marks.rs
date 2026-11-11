@@ -3,7 +3,7 @@
 //! keeps them. Unflagged segments plan exactly as before (the planning goldens). Rendered tests
 //! are in `sound_marks_acoustic.rs`.
 use chimera::anatomy::human::{ArticKey, BodyMix};
-use chimera::control::score::Gesture;
+use chimera::control::score::{ControlKey, Gesture};
 use chimera::phonetics::ipa::tokenize_ipa;
 use chimera::phonetics::planner::{PlanOptions, plan_utterance};
 use chimera::phonetics::sing::{NoteOnOptions, SongOptions, SungNote, plan_note_on, plan_song};
@@ -179,6 +179,106 @@ fn the_palatal_posture_holds_until_the_voice_returns() {
     let t1 = plan(&seg(None)).segments[0].t1;
     assert!(end(Some(true)) > t1 + 0.05, "aspirated: {}", end(Some(true)) - t1);
     assert!(end(Some(false)) < t1 + 0.03, "unaspirated: {}", end(Some(false)) - t1);
+}
+
+fn breathy(s: &Segment) -> Option<bool> {
+    s.breathy
+}
+
+#[test]
+fn a_breathy_release_mark_sets_voiced_stops_and_affricates() {
+    assert_eq!(flags("bʱa", breathy), pairs(&[("b", true), ("a", false)]));
+    assert_eq!(flags("bʱ dʱ ɡʱ ɖʱ dʒʱ dzʱ", breathy), pairs(&[("b", true), ("d", true), ("g", true), ("ɖ", true), ("dʒ", true), ("dz", true)]));
+}
+
+#[test]
+fn the_combining_diaeresis_below_makes_a_vowel_breathy() {
+    assert_eq!(flags("a\u{324}", breathy), pairs(&[("a", true)]));
+    assert_eq!(flags("\u{25B}\u{324}", breathy), pairs(&[("ɛ", true)]));
+    // ṳ is one code point after NFC; the length mark may come first (aː̤)
+    assert_eq!(tokenize_ipa("\u{1E73}"), tokenize_ipa("u\u{324}"));
+    assert_eq!(flags("\u{1E73}", breathy), pairs(&[("u", true)]));
+    let long = tokenize_ipa("a\u{2D0}\u{324}");
+    assert_eq!((long.len(), long[0].breathy, long[0].dur), (1, Some(true), Some(0.15 * 1.7)));
+    // with a nasal mark too, in either order
+    for ipa in ["a\u{324}\u{303}", "a\u{303}\u{324}"] {
+        let s = tokenize_ipa(ipa);
+        assert_eq!((s.len(), s[0].breathy, s[0].nasalized), (1, Some(true), Some(true)), "{ipa:?}");
+    }
+}
+
+#[test]
+fn a_breathy_mark_on_the_wrong_sound_is_ignored() {
+    // ʱ: not after a voiceless stop, a fricative, a nasal, a glottal, a vowel, a pause, or alone
+    for ipa in ["pʱ", "sʱ", "zʱ", "mʱ", "hʱ", "ɦʱ", "aʱ", "|ʱ", "ʱ", "ʱb"] {
+        assert!(tokenize_ipa(ipa).iter().all(|s| s.breathy.is_none()), "{ipa}");
+    }
+    // the diaeresis below: not on a consonant
+    for ipa in ["b\u{324}a", "m\u{324}a", "s\u{324}a", "\u{324}a"] {
+        assert!(tokenize_ipa(ipa).iter().all(|s| s.breathy.is_none()), "{ipa:?}");
+    }
+    assert_eq!(tokenize_ipa("m\u{324}a"), tokenize_ipa("ma"));
+}
+
+#[test]
+fn the_owners_hindi_pair_now_differs() {
+    // पल / फल were both "p ʌ l"; and बल / भल differ by the breathy release
+    assert_ne!(tokenize_ipa("pʌl"), tokenize_ipa("pʰʌl"));
+    assert_ne!(tokenize_ipa("bʌl"), tokenize_ipa("bʱʌl"));
+    assert_ne!(tokenize_ipa("bʌl"), tokenize_ipa("pʰʌl"));
+}
+
+#[test]
+fn a_breathy_release_parts_the_folds_across_the_release_and_into_the_vowel() {
+    let seg = |b| vec![Segment { breathy: b, ..Segment::new("b") }, Segment { stress: Some(1), ..Segment::new("a") }];
+    let (modal, soft) = (plan(&seg(None)), plan(&seg(Some(true))));
+    assert!(labelled(&modal.gestures, "breathy").is_empty());
+    let g = labelled(&soft.gestures, "breathy");
+    assert_eq!(g.len(), 1);
+    let (stop, vowel) = (&soft.segments[0], &soft.segments[1]);
+    // ɦ's abduction, from just before the release to 80 ms after it (the vowel here lasts longer)
+    assert_eq!(g[0].targets.get(ControlKey::ABDUCTION), Some(0.1));
+    assert!((g[0].t0 - (stop.t1 - 0.02)).abs() < 1e-9 && (g[0].t1 - (stop.t1 + 0.08)).abs() < 1e-9 && vowel.t1 > g[0].t1);
+    // a short vowel ends it
+    let short = plan(&[Segment { breathy: Some(true), ..Segment::new("b") }, Segment { dur: Some(0.04), ..Segment::new("a") }]);
+    assert_eq!(labelled(&short.gestures, "breathy")[0].t1, short.segments[1].t1);
+    // nothing else about the plan changes
+    let rest = |p: &Plan| serde_json::to_string(&p.gestures.iter().filter(|g| g.label.as_ref().is_none_or(|l| l.as_str() != "breathy")).collect::<Vec<_>>()).unwrap();
+    assert_eq!(rest(&modal), rest(&soft));
+    // a flag on a sound the mark does not apply to does nothing
+    for c in ["p", "s", "m", "ɦ", "l"] {
+        let p = plan(&[Segment { breathy: Some(true), ..Segment::new(c) }, Segment::new("a")]);
+        assert!(labelled(&p.gestures, "breathy").is_empty(), "{c}");
+    }
+}
+
+#[test]
+fn a_breathy_vowel_parts_the_folds_for_the_whole_vowel() {
+    let modal = plan(&tokenize_ipa("pa"));
+    let soft = plan(&tokenize_ipa("pa\u{324}"));
+    assert!(labelled(&modal.gestures, "breathy").is_empty());
+    let g = labelled(&soft.gestures, "breathy");
+    assert_eq!(g.len(), 1);
+    assert_eq!((g[0].t0, g[0].t1), (soft.segments[1].t0, soft.segments[1].t1));
+    assert_eq!(g[0].targets.get(ControlKey::ABDUCTION), Some(0.1));
+    // through a diphthong's glide
+    let d = plan(&tokenize_ipa("a\u{26A}\u{324}"));
+    let g = labelled(&d.gestures, "breathy");
+    assert_eq!((g.len(), g[0].t0, g[0].t1), (1, d.segments[0].t0, d.segments[1].t1));
+}
+
+#[test]
+fn sung_syllables_keep_their_breathiness() {
+    let song = |onset: Vec<Segment>, nucleus: Segment| plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: syl(onset, nucleus) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0 });
+    let live = |onset: Vec<Segment>, nucleus: Segment| plan_note_on(&syl(onset, nucleus), 57.0, &NoteOnOptions { body: "male".into(), vibrato: 0.0, tag: 1.0, legato_from: None });
+    let (b, b_soft) = (Segment::new("b"), Segment { breathy: Some(true), ..Segment::new("b") });
+    let (a, a_soft) = (Segment::new("a"), Segment { breathy: Some(true), ..Segment::new("a") });
+    assert_eq!(labelled(&song(vec![b_soft.clone()], a.clone()).gestures, "breathy").len(), 1);
+    assert_eq!(labelled(&song(vec![b.clone()], a_soft.clone()).gestures, "breathy").len(), 1);
+    assert!(labelled(&song(vec![b.clone()], a.clone()).gestures, "breathy").is_empty());
+    assert_eq!(labelled(&live(vec![b_soft], a.clone()), "breathy").len(), 1);
+    assert_eq!(labelled(&live(vec![b.clone()], a_soft), "breathy").len(), 1);
+    assert!(labelled(&live(vec![b], a), "breathy").is_empty());
 }
 
 #[test]
