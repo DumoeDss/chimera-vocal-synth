@@ -22,6 +22,15 @@ fn known() -> &'static HashSet<&'static str> {
     })
 }
 
+/// Every symbol `tokenize_ipa` can emit: the inventory's consonants, the vowel letters and the
+/// multi-letter affricates and diphthongs. Not every one is a sound the planner can sing (see
+/// `ipa_lyrics::sung_symbols`).
+pub fn known_ipa_symbols() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = known().iter().copied().collect();
+    v.sort_unstable();
+    v
+}
+
 /// Force the tables (the known-symbol set and the NFC data), so nothing initialises lazily later.
 pub fn init() {
     known();
@@ -29,6 +38,38 @@ pub fn init() {
 }
 
 pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
+    tokenize(input, &mut Gaps::default())
+}
+
+/// What `tokenize_ipa` leaves out of its input without a word.
+#[derive(Default)]
+struct Gaps {
+    /// symbols it does not know
+    unknown: Vec<String>,
+    /// letters that carried a combining mark it does not model (nasalisation, devoicing, ...)
+    marked: Vec<String>,
+}
+
+/// The symbols in `input` that `tokenize_ipa` silently drops because the engine does not know them
+/// (a typo, a capital, a precomposed nasal vowel such as ã, a click), in order, each once. The
+/// tokenizer and the planner treat a symbol outside the inventory as nothing, so a word written
+/// with one sings as another sound; callers that take IPA from a person should show this list.
+pub fn unknown_ipa(input: &str) -> Vec<String> {
+    let mut g = Gaps::default();
+    tokenize(input, &mut g);
+    g.unknown
+}
+
+/// The letters in `input` that carry a combining mark the tokenizer skips without modelling it
+/// (the tilde of a nasal vowel `ɔ̃`, the ring of a devoiced `n̥`, the syllabic and non-syllabic
+/// marks), shown with their mark, in order, each once. The letter is sung; the mark is not.
+pub fn ignored_ipa_marks(input: &str) -> Vec<String> {
+    let mut g = Gaps::default();
+    tokenize(input, &mut g);
+    g.marked
+}
+
+fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
     let mut s = nfc(input);
     for (a, b) in ALIASES {
         s = s.replace(a, b);
@@ -88,11 +129,21 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
         }
         i += tok.chars().count();
         // skip combining diacritics we do not model
+        let marks_from = i;
         while i < s.len() && ('\u{300}'..='\u{36F}').contains(&s[i]) {
             i += 1;
         }
         if !known.contains(tok.as_str()) {
+            if !gaps.unknown.contains(&tok) {
+                gaps.unknown.push(tok);
+            }
             continue;
+        }
+        if i > marks_from {
+            let shown: String = tok.chars().chain(s[marks_from..i].iter().copied()).collect();
+            if !gaps.marked.contains(&shown) {
+                gaps.marked.push(shown);
+            }
         }
         let is_v = tok.chars().next().is_some_and(|c| VOWEL_CHARS.contains(c)) && !super::inventory::consonant_symbols().contains(&tok.as_str());
         out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), ..Default::default() });

@@ -11,6 +11,7 @@
 
 use crate::anatomy::human::BodyMix;
 use super::english::js_is_space;
+use super::ipa_lyrics::IpaLyrics;
 use super::japanese::Japanese;
 use super::korean::Korean;
 use super::mandarin::Pinyin;
@@ -166,6 +167,16 @@ pub trait FrontEnd {
     fn continues(&self, c: char) -> bool {
         self.starts(c)
     }
+    /// Where a word that starts at `s[i]` ends (exclusive). The default is the run of characters
+    /// that `continues` it. A front end whose words are delimited rather than spelled in a script
+    /// (IPA between slashes) overrides this.
+    fn scan(&self, s: &[char], i: usize) -> usize {
+        let mut j = i + 1;
+        while j < s.len() && self.continues(s[j]) {
+            j += 1;
+        }
+        j
+    }
     /// Whether this front end reads the whole `word` it scanned (default: yes). A front end that
     /// shares a script with another says no to what isn't its own, and the next one gets the word
     /// (pinyin and English share the Latin alphabet).
@@ -207,7 +218,7 @@ impl<W: WordSource> FrontEnd for English<'_, W> {
     }
 }
 
-enum Token {
+pub(super) enum Token {
     Word(usize, String),
     Mark(char),
 }
@@ -215,7 +226,7 @@ enum Token {
 /// Words (with the index of the front end that claims them), melisma marks and phrase punctuation,
 /// in order. For English and Hangul this is
 /// `text.match(/[A-Za-z'][A-Za-z'\-]*|[가-힣]+|(?<=\s|^)[~-](?=\s|$)|[.,;:!?\n]/g)`.
-fn lyric_tokens(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Token> {
+pub(super) fn lyric_tokens(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Token> {
     let s: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
@@ -227,10 +238,7 @@ fn lyric_tokens(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Token> {
         let mut declined = i;
         let mut word = None;
         for (k, f) in front_ends.iter().enumerate().filter(|(_, f)| f.starts(c)) {
-            let mut j = i + 1;
-            while j < s.len() && f.continues(s[j]) {
-                j += 1;
-            }
+            let j = f.scan(&s, i);
             let w: String = s[i..j].iter().collect();
             if f.claims(&w) {
                 word = Some((k, j, w));
@@ -283,7 +291,7 @@ pub fn read_lyrics(text: &str, front_ends: &[&dyn FrontEnd]) -> Vec<Syllable> {
 
 /// Lyrics text → syllables through the built-in front ends that need no data beyond the English
 /// dictionary: pinyin (only words with tones; before English, which shares its alphabet), English
-/// (`g2p`), Korean and Japanese (kana).
+/// (`g2p`), Korean, Japanese (kana) and IPA words between slashes.
 pub fn lyrics_to_syllables(text: &str, g2p: &impl WordSource) -> Vec<Syllable> {
-    read_lyrics(text, &[&Pinyin, &English(g2p), &Korean, &Japanese])
+    read_lyrics(text, &[&Pinyin, &English(g2p), &Korean, &Japanese, &IpaLyrics])
 }
