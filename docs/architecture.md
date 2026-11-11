@@ -146,6 +146,12 @@ branching (nasal tract, sinuses, piriform fossae, two bronchi, vocal sacs, OEC).
   (`breathy`): glottal abduction of 0.1, as for /ɦ/, over the release and 80 ms after it, or over
   the vowel. A mark on a sound it doesn't apply to is ignored, and with no flag set the plan is
   the one English always had. Other IPA diacritics are still dropped.
+* Alveolo-palatals and ɥ ([#32](https://github.com/jamesondh/chimera-vocal-synth/issues/32)
+  step 3, consonants): the inventory has ɕ ʑ (laminal fricatives, calibrated like ʃ), the
+  affricates tɕ dʑ tʂ dʐ (one segment, with or without a tie bar, released into ɕ ʑ ʂ ʐ) and ɥ
+  (/j/ with /w/'s rounding). The sound marks apply to them as to other consonants, except ʲ, which
+  adds nothing to a sound whose own gesture already holds the tongue body at /j/'s place. The
+  seven missing vowels are still open.
 
 ## 5. FX / output
 
