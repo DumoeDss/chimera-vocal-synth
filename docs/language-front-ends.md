@@ -166,7 +166,13 @@ A sung syllable per sounding note:
   tongue sat at its posture for 80-100 ms and the main vowel was 90% reached 200 ms after the
   beat, so a native listener heard 两 as *li-ang* and 快 as *ku-ai*. Now the main vowel is 90%
   reached 80-90 ms after the beat (50 ms without a medial), `tests/medials.rs`. The apical vowels ɿ (四) and ʅ (是) are
-  calibrated vowels too. A vowel may say `"nasalized": true` (a combining tilde: the velum lowers for
+  calibrated vowels too, but made with the tongue tip, not fitted to their formants alone: the
+  calibrator (`chimera calibrate vowels`) pins their lips (spread and open as for [i], no narrowing or
+  protrusion) and their tongue tip (the place of the sibilant before them, ɿ at s's, ʅ at ʂ's and
+  curled, opened 0.11 in TtY so the constriction is ~0.3 cm², a vowel's) and fits the tongue body,
+  jaw, root and larynx around that. The tip hardly moves from the consonant into the vowel (tip
+  y 0.05-0.28 apart, was 1.7-2.5; `tests/apical.rs`). Fitted to formants alone it hit them with
+  lips narrowed to 0.2 aperture and no tip at all, and native listeners heard 只 as zhu, zhe or zhi. A vowel may say `"nasalized": true` (a combining tilde: the velum lowers for
   the whole vowel, glides included) and `"breathy": true` (a diaeresis below: the folds part-open).
 - **Sound marks** (`nasalized`, `palatalized`, `breathy`, with `aspirated`): the planner turns each
   into gestures on the velum, the tongue body or the glottis, and a mark on a sound it doesn't apply

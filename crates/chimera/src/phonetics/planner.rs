@@ -144,8 +144,10 @@ fn preset_vowel_artic(ipa: &str, body: BodyName) -> Option<ArticPatch> {
         }
     }
     // a rhotic's tip is raised and curled back, not resting behind the teeth: without its
-    // calibrated position the tip stayed down and /ɝ/'s F3 sat ~15–20 % high (weakly rhotic)
-    if v.artic.get(ArticKey::TtCurl).unwrap_or(0.0) > 0.05 {
+    // calibrated position the tip stayed down and /ɝ/'s F3 sat ~15–20 % high (weakly rhotic). The
+    // apical vowels are made with the tongue tip, at the place of the sibilant before them (ʅ
+    // curled, ɿ not): their tip is part of the vowel too
+    if v.artic.get(ArticKey::TtCurl).unwrap_or(0.0) > 0.05 || ipa == "ɿ" {
         if let Some(x) = v.artic.get(ArticKey::TtX) {
             out.set(ArticKey::TtX, x);
         }
