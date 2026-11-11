@@ -46,6 +46,11 @@ claims only a word that carries tones and parses fully into real syllables:
 - **Tone changes:** third-tone sandhi applies inside a word (`nǐhǎo` sings nǐ rising). Write 不 and 一
   with the tone they're sung with (`bú`, `yí`), since pinyin alone can't tell 不 from 部.
 
+Mandarin's er (耳 ěr, 二 èr, 儿 ér) is a central vowel moving into the r-colouring, [əɚ], with 二 more
+open, [aɚ]: the rising nuclei `əɝ` and `aɝ`, a quick [ə] or [a] before the beat and the r-coloured ɝ
+held from it. English's /ɝ/ held still put F3 low from the first frame; here it falls from ~2300 Hz at
+the beat to ~1870 over 120 ms (`tests/er.rs`).
+
 Both Mandarin front ends sing erhua as one syllable ending in ɻ: 一点儿 is 一 + 点儿 (pinyin
 `yìdiǎnr`), 哪儿 is `nǎr`. A 儿 that is a word's own syllable (女儿, 儿子) stays a syllable.
 
@@ -153,7 +158,7 @@ A sung syllable per sounding note:
   `"palatalized": true` (`ʲ`) and a voiced stop or affricate `"breathy": true` (`ʱ`).
 - `nucleus`: one vowel, or a diphthong the planner knows. A note sings it as an on-glide, a held
   vowel and an off-glide. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold their first vowel and glide off in
-  the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing the first vowel as a quick
+  the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ, and Mandarin's er: əɝ, aɝ for 二) sing the first vowel as a quick
   glide of 50 ms that ends on the beat, after the initial consonant, so the second vowel holds from
   the beat. Triphthongs (iaʊ iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting
   the glide in the onset as a consonant (j w ɥ), where the planner treats it as a consonant. The

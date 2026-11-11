@@ -137,8 +137,8 @@ fn erhua_merges_into_the_syllable_before() {
     assert_eq!(shown("哪儿"), "哪儿=naɻ");
     assert_eq!(shown("一会儿"), "一=i 会儿=xweɻ");
     // 儿 as a word's own syllable
-    assert_eq!(shown("女儿"), "女=ny 儿=ʔɝ");
-    assert_eq!(shown("儿子"), "儿=ʔɝ 子=ts˭ɿ");
+    assert_eq!(shown("女儿"), "女=ny 儿=ʔəɝ");
+    assert_eq!(shown("儿子"), "儿=ʔəɝ 子=ts˭ɿ");
     // pinyin's r
     let p: Vec<String> = typed("nǎr yìdiǎnr").into_iter().map(|x| x.1).collect();
     assert_eq!(p, ["naɻ", "i", "t˭iɛɻ"]);

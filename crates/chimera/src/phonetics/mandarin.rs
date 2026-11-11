@@ -292,6 +292,11 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
     // the apical vowels: the consonant's tongue held open (ɿ after z c s, ʅ after zh ch sh r)
     let apical_vowel = if matches!(ini, "z" | "c" | "s") { "ɿ" } else { "ʅ" };
     let (glide, mut nucleus, coda) = if apical { (&[][..], apical_vowel, &[][..]) } else { final_parts(&fin)? };
+    // er is a central vowel (a, for the fourth tone: 二 is more open) moving into the r-colouring, not
+    // English's /ɝ/ held still: the start is the quick on-glide, the r-coloured vowel holds the note
+    if fin == "er" {
+        nucleus = if t == 4 { "aɝ" } else { "əɝ" };
+    }
     // a neutral-tone syllable's e reduces (的 de, 了 le)
     if t == 5 && nucleus == "ɤ" {
         nucleus = "ə";

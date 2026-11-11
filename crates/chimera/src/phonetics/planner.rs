@@ -63,6 +63,9 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
         "uɑ" => &["u", "ɑ"],
         "uə" => &["u", "ə"],
         "yɛ" => &["y", "ɛ"],
+        // Mandarin's er: a central (er4: open) start, the r-colouring arriving in the held vowel
+        "əɝ" => &["ə", "ɝ"],
+        "aɝ" => &["a", "ɝ"],
         "uɔ" => &["u", "ɔ"],
         // a central start, Mandarin's ou ([əʊ], where English [oʊ] starts nearly at [u])
         "əʊ" => &["ə", "ʊ"],
@@ -77,7 +80,7 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
 
 /// A rising nucleus (a rising diphthong or a triphthong): its first part is a short glide.
 pub fn is_rising(ipa: &str) -> bool {
-    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ")
+    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "əɝ" | "aɝ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ")
 }
 
 /// A rising nucleus's on-glide (its first part), sung short at the note's start.
