@@ -134,8 +134,13 @@ Every front end writes the same thing, one sung syllable per sounding note:
   above: 45 asked gives 53–69 ms, 90 gives 96–110).
 - `nucleus`: one vowel, or a diphthong the planner knows. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold
   their first vowel and glide off at the note's end; rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing
-  a short glide on the beat (a quarter of the vowel, at most 120 ms) and hold the second;
-  triphthongs (iaʊ iəʊ uaɪ ueɪ) do both. The apical vowels ɿ ʅ are calibrated vowels too.
+  the first vowel as a quick glide of 50 ms that ends on the beat, after the initial consonant, so
+  the second vowel holds from the beat; triphthongs (iaʊ iəʊ uaɪ ueɪ) do both. The glide is not held
+  on the beat: sung there as a vowel of its own (it was a quarter of the vowel, at most 120 ms) the
+  jaw and tongue sat at its posture for 80-100 ms and the main vowel was 90% reached 200 ms after
+  the beat, so a native listener heard 两 as *li-ang* and 快 as *ku-ai*. Now it is 90% reached
+  80-90 ms after the beat (50 ms without a medial), `tests/medials.rs`. The apical vowels ɿ ʅ are
+  calibrated vowels too.
 - A consonant may say its sung `"dur"` (s); unsaid, its spoken length × 0.8.
 - `pitch`: bends at the note's start, middle or end (below).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: none).
