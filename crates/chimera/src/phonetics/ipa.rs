@@ -1,7 +1,7 @@
 //! IPA string → segments (stress ˈ ˌ, length ː, tie bars, affricates, diphthongs, word gaps).
 
 use super::Segment;
-use super::inventory::Manner;
+use super::inventory::{Manner, PhonemeDef, Voicing};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -10,11 +10,12 @@ const VOWEL_CHARS: &str = "iyɨʉɯuɪʏʊeøɘɵɤoəɛœɜɞʌɔæɐaɶɑɒɝ�
 const MULTI: [&str; 10] = ["tʃ", "dʒ", "ts", "dz", "pf", "aɪ", "aʊ", "ɔɪ", "eɪ", "oʊ"];
 const ALIASES: [(&str, &str); 9] = [("t͡ʃ", "tʃ"), ("d͡ʒ", "dʒ"), ("t͡s", "ts"), ("d͡z", "dz"), ("ɡ", "g"), ("ʧ", "tʃ"), ("ʤ", "dʒ"), ("r̥", "r"), ("ɐ̯", "ɐ")];
 
-/// combining tilde: the vowel before it is nasalized
+/// combining tilde and combining diaeresis below: the vowel before them is nasalized, breathy
 const NASALIZED: char = '\u{303}';
-/// NFC composes these vowels with their tilde into one code point; the tokenizer reads them as the
+const BREATHY: char = '\u{324}';
+/// NFC composes these vowels with their mark into one code point; the tokenizer reads them as the
 /// vowel and the mark (those that don't compose, like ɛ̃, arrive as two)
-const PRECOMPOSED: [(&str, &str); 6] = [("ã", "a\u{303}"), ("õ", "o\u{303}"), ("ẽ", "e\u{303}"), ("ĩ", "i\u{303}"), ("ũ", "u\u{303}"), ("ỹ", "y\u{303}")];
+const PRECOMPOSED: [(&str, &str); 7] = [("ã", "a\u{303}"), ("õ", "o\u{303}"), ("ẽ", "e\u{303}"), ("ĩ", "i\u{303}"), ("ũ", "u\u{303}"), ("ỹ", "y\u{303}"), ("ṳ", "u\u{324}")];
 
 fn known() -> &'static HashSet<&'static str> {
     static K: OnceLock<HashSet<&'static str>> = OnceLock::new();
@@ -80,16 +81,28 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
         }
         // palatalization, on a consonant made with a mouth gesture (not a glottal one)
         if ch == 'ʲ' {
-            if let Some(last) = out.last_mut().filter(|l| super::inventory::consonants().iter().any(|c| c.ipa == l.ipa && c.manner != Manner::Glottal)) {
+            if let Some(last) = out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.manner != Manner::Glottal)) {
                 last.palatalized = Some(true);
             }
             i += 1;
             continue;
         }
-        // a tilde after the length mark instead of the vowel (ɛː̃)
-        if ch == NASALIZED && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
+        // a breathy-voiced release, on a voiced stop or affricate (Hindi bʱ dʱ gʱ)
+        if ch == 'ʱ' {
+            if let Some(last) = out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.voicing == Voicing::Voiced && matches!(c.manner, Manner::Stop | Manner::Affricate))) {
+                last.breathy = Some(true);
+            }
+            i += 1;
+            continue;
+        }
+        // a vowel mark after the length mark instead of the vowel (ɛː̃)
+        if (ch == NASALIZED || ch == BREATHY) && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
             if let Some(last) = out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
-                last.nasalized = Some(true);
+                if ch == NASALIZED {
+                    last.nasalized = Some(true);
+                } else {
+                    last.breathy = Some(true);
+                }
             }
             i += 1;
             continue;
@@ -112,22 +125,27 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             tok = ch.to_string();
         }
         i += tok.chars().count();
-        // combining diacritics: the tilde is read, the rest we do not model
-        let mut nasalized = false;
+        // combining diacritics: the tilde and the diaeresis below are read, the rest we do not model
+        let (mut nasalized, mut breathy) = (false, false);
         while i < s.len() && ('\u{300}'..='\u{36F}').contains(&s[i]) {
             nasalized |= s[i] == NASALIZED;
+            breathy |= s[i] == BREATHY;
             i += 1;
         }
         if !known.contains(tok.as_str()) {
             continue;
         }
         let is_v = is_vowel_token(&tok);
-        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), nasalized: (is_v && nasalized).then_some(true), ..Default::default() });
+        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), nasalized: (is_v && nasalized).then_some(true), breathy: (is_v && breathy).then_some(true), ..Default::default() });
         if is_v {
             stress = 0;
         }
     }
     out
+}
+
+fn consonant(ipa: &str) -> Option<&'static PhonemeDef> {
+    super::inventory::consonants().iter().find(|c| c.ipa == ipa)
 }
 
 fn is_vowel_token(tok: &str) -> bool {
