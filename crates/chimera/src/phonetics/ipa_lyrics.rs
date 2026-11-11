@@ -15,9 +15,9 @@
 //!   stops and affricates, then fricatives, nasals, liquids (laterals, taps, trills), then
 //!   approximants. A single consonant always starts the next syllable (`ɡɾa.sjas`), a falling pair
 //!   splits (`mas.ta`); write a `.` to say otherwise.
-//! - A `.` breaks a syllable there, and so does a stress mark: ˈ and ˌ begin the stressed syllable,
-//!   so `/kaˈfe/` splits at the mark whatever the sonority says. `,` and `|` break too.
-//!   Two vowels side by side are two syllables.
+//! - A `.` breaks a syllable there (`,` and `|` too). Stress marks do not: eSpeak NG writes them
+//!   right before the vowel (`həlˈəʊ`), the IPA convention puts them before the syllable
+//!   (`həˈləʊ`), and sonority gives `hə.ləʊ` for both. Two vowels side by side are two syllables.
 //!
 //! **Marks** read as the tokenizer reads them: stress, length `ː`, tie bars, `ʰ` and `˭`. Written
 //! as narrow transcription, an unmarked voiceless stop or affricate is unaspirated and `ʰ` makes it
@@ -118,31 +118,9 @@ fn typed(s: &Segment) -> String {
     format!("{}{}{mark}", s.ipa, if s.dur.is_some() { "ː" } else { "" })
 }
 
-/// The pieces a word is read in: it breaks at `.` `,` `|` (dropped) and before a stress mark, which
-/// starts the piece it begins.
-fn pieces(word: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut cur = String::new();
-    for c in word.chars() {
-        match c {
-            '.' | ',' | '|' => {
-                if !cur.is_empty() {
-                    out.push(std::mem::take(&mut cur));
-                }
-            }
-            'ˈ' | 'ˌ' | '\'' => {
-                if !cur.is_empty() {
-                    out.push(std::mem::take(&mut cur));
-                }
-                cur.push(c);
-            }
-            _ => cur.push(c),
-        }
-    }
-    if !cur.is_empty() {
-        out.push(cur);
-    }
-    out
+/// The pieces a word is read in: it breaks at `.` `,` `|` (dropped).
+fn pieces(word: &str) -> Vec<&str> {
+    word.split(['.', ',', '|']).filter(|p| !p.is_empty()).collect()
 }
 
 /// One space-free IPA word → its syllables.
@@ -151,7 +129,7 @@ fn word_syllables(word: &str) -> Vec<Syllable> {
     let mut breaks: Vec<usize> = Vec::new();
     for piece in pieces(word) {
         let before = segs.len();
-        for s in tokenize_ipa(&piece) {
+        for s in tokenize_ipa(piece) {
             if s.ipa == "_" {
                 continue;
             }

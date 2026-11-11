@@ -97,11 +97,13 @@ fn a_dot_forces_a_break_where_the_rule_would_not() {
 }
 
 #[test]
-fn a_stress_mark_begins_a_syllable() {
-    // the stress mark puts the s on the right, where s-t alone would split
-    assert_eq!(split("/kaˈsta/"), "ka.sta");
-    assert_eq!(split("/kasta/"), "kas.ta");
-    assert_eq!(shown("/kaˈsta/"), ["ka", "ˈsta"]);
+fn a_stress_mark_does_not_move_a_syllable_break() {
+    // eSpeak NG writes the mark before the vowel (həlˈoʊ), the IPA convention before the syllable
+    // (həˈloʊ): both split by sonority, and the mark lands on the stressed syllable's text
+    assert_eq!(split("/həlˈoʊ/"), "hə.loʊ");
+    assert_eq!(split("/həˈloʊ/"), "hə.loʊ");
+    assert_eq!(shown("/həlˈoʊ/"), ["hə", "ˈloʊ"]);
+    assert_eq!(split("/kaˈsta/"), "kas.ta");
 }
 
 #[test]
