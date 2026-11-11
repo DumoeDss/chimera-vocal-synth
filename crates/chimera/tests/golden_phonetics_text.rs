@@ -122,6 +122,10 @@ fn songs_and_vowel_data_match_typescript() {
     let fx = load("phonetics-data");
     let mut f = Vec::new();
     check("demo songs", &fx["songs"], songs::DEMO_SONGS, &mut f);
-    check("vowel refs", &fx["vowels"], vowel_data::VOWELS, &mut f);
+    // the fixture records the 22 vowels the TypeScript engine had; vowels added since come after
+    // them (see tests/new_vowels.rs for those)
+    let recorded = fx["vowels"].as_array().unwrap().len();
+    assert_eq!(recorded, 22, "the fixture's vowel list is the TypeScript engine's");
+    check("vowel refs", &fx["vowels"], &vowel_data::VOWELS[..recorded], &mut f);
     report("data", 2, f);
 }

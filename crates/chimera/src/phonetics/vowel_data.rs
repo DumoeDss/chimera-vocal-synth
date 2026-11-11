@@ -1,6 +1,9 @@
 //! Reference vowel formants (Hz) used to calibrate articulatory vowel targets.
 //! English vowels: Hillenbrand, Getty, Clark & Wheeler (1995) means (men / women / children).
-//! Other cardinal-ish vowels: typical literature values (men), scaled for women/children.
+//! Other cardinal-ish vowels (ɒ ɐ y ø œ ɨ ɯ ɤ and the central ones): typical literature values (men),
+//! scaled for women/children. No source is recorded for these.
+//! ʏ has a recorded source (see its entry). ʉ ɘ ɵ ɜ ɞ ɶ have none yet (no usable source was found),
+//! so they have no entry: the tokenizer accepts them and the planner says nothing for them.
 
 use serde::Serialize;
 
@@ -63,4 +66,10 @@ pub static VOWELS: &[VowelRef] = &[
     vref("ɨ", "close central", [330.0, 1600.0, 2400.0], None, None, false, 0.0, 0.5),
     vref("ɯ", "close back unrounded", [340.0, 1350.0, 2400.0], None, None, false, 0.0, 1.0),
     vref("ɤ", "close-mid back unrounded", [460.0, 1250.0, 2450.0], None, None, false, 0.35, 1.0),
+    // Dutch /ʏ/, the vowel of "hut" (Pols's table writes it /œ/). Measured: Pols, Tromp & Plomp
+    // (1973), "Frequency analysis of Dutch vowels from 50 male speakers", JASA 53:1093–1101,
+    // Table I (p. 1094): 50 men, words h-V-t, mean F1 438, F2 1498, F3 2354 Hz. Dutch men only: not
+    // German /ʏ/, whose formants this entry says nothing about. Women and children are the
+    // file's scale factors (the paper has no women).
+    vref("ʏ", "Dutch hut", [438.0, 1498.0, 2354.0], None, None, true, 0.2, 0.1),
 ];

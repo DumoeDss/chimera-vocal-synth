@@ -98,6 +98,33 @@ fn calibrate_vowels_missing_changes_nothing_when_nothing_is_missing() {
     assert!(std::fs::read_to_string(&out).unwrap() == committed, "nothing missing: the file must not change");
 }
 
+/// With ʏ cut out of the male body, `--missing` brings back ʏ alone (appended last) and the rest
+/// stays identical. Fits one vowel (a few seconds).
+#[test]
+fn calibrate_vowels_missing_refits_only_the_vowel_that_was_cut() {
+    let committed = std::fs::read_to_string(format!("{PHONETICS}/vowelTargets.generated.json")).unwrap();
+    let out = tmp("vowelTargets-cut.json");
+    // cut the male ʏ entry (the last of the male body) and ask again for the male body only
+    let start = committed.find(",\n  \"ʏ\": {").unwrap();
+    let end = committed.find("\n },\n \"female\"").unwrap();
+    let cut = format!("{}{}", &committed[..start], &committed[end..]);
+    std::fs::write(&out, &cut).unwrap();
+    chimera(&["calibrate", "vowels", "male", "--missing", "--out", &out]);
+    let got: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+    let want: serde_json::Value = serde_json::from_str(&committed).unwrap();
+    for body in ["male", "female", "child"] {
+        for (k, v) in want[body].as_object().unwrap() {
+            if (body, k.as_str()) != ("male", "ʏ") {
+                assert_eq!(got[body][k], *v, "{body} {k} changed");
+            }
+        }
+    }
+    // refitted and appended after the others
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.find("\"ɤ\": {").unwrap() < text.find("\"ʏ\": {").unwrap(), "the refitted vowel is appended");
+    assert_eq!(got["male"]["ʏ"]["formants"].as_array().unwrap().len(), 4);
+}
+
 /// About 100 s in release. Not byte-identical: the Nelder–Mead fit runs 1 800 + 2 × 1 000
 /// iterations on a flat minimum, which amplifies last-ulp differences between V8's libm and Rust's
 /// (in the airway geometry and the transfer function) into ~1e-4 changes of the fitted posture.

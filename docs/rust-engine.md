@@ -266,7 +266,9 @@ render call and so it isn't needed.
 - **Only the human-voice audio fixtures can be re-blessed.** The others record the TS engine.
 - **Vowel calibration isn't bit-reproducible.** `chimera calibrate vowels` moves 7 posture
   values by ±0.001–0.002: last-ulp math differences, amplified by Nelder–Mead on flat minima.
-  The committed table is kept, so the voice is unchanged.
+  The committed table is kept, so the voice is unchanged. To add a vowel without moving the
+  others, add it to `VOWELS` and run `chimera calibrate vowels all --missing`: it fits only the
+  vowels the table lacks and appends them.
 
 **Open**
 - **Determinism on aarch64/macOS** is untested.

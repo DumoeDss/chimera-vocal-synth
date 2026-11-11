@@ -36,6 +36,9 @@ fn table(ipa: &str) -> Option<(f64, f64)> {
         "aʊ" => (240.0, 100.0),
         "ɔɪ" => (280.0, 150.0),
         "ɨ" => (110.0, 40.0),
+        // ʏ takes its unrounded counterpart ɪ's durations (Klatt's table is by height, not
+        // rounding); without an entry a vowel gets 80 / 48 ms, the consonant fallback
+        "ʏ" => (135.0, 40.0),
         // consonants
         "p" => (85.0, 50.0),
         "t" => (75.0, 50.0),

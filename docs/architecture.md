@@ -175,7 +175,13 @@ and the commit history actually cite, and says where they cite nothing.
   load. The code names Flanagan but no publication.
 - **Vowel targets** (`phonetics/vowel_data.rs`, `chimera calibrate`): the English vowels are
   calibrated to the men's, women's and children's means of Hillenbrand, Getty, Clark & Wheeler
-  (1995). The other vowels use "typical literature values" whose source isn't recorded.
+  (1995). ʏ is the one other vowel with a recorded source, and it is **Dutch** /ʏ/, not measured
+  German: the mean of 50 Dutch men saying h-V-t words, the vowel of "hut" (printed /œ/ in that
+  table), in Pols, Tromp & Plomp (1973), JASA 53:1093–1101, Table I. Its women's and children's
+  values are the men's scaled by the factors in `vowel_data.rs` (the paper has no women). The
+  rest (ɒ ɐ y ø œ ɨ ɯ ɤ and the central vowels) use "typical literature values" whose source
+  isn't recorded. ʉ ɘ ɵ ɜ ɞ ɶ have no target yet, because no usable source was found: the
+  planner doesn't say them.
 - **Segment durations** (`phonetics/durations.rs`): Klatt's (1979) duration rules as given for
   MITalk in Allen, Hunnicutt & Klatt (1987), ch. 9.
 - **Gestures** (`control/score.rs`, `control/articulators.rs`, `phonetics/planner.rs`): the code
