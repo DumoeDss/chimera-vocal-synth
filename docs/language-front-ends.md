@@ -153,10 +153,14 @@ A sung syllable per sounding note:
   `"palatalized": true` (`ʲ`) and a voiced stop or affricate `"breathy": true` (`ʱ`).
 - `nucleus`: one vowel, or a diphthong the planner knows. A note sings it as an on-glide, a held
   vowel and an off-glide. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold their first vowel and glide off in
-  the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing a short glide on the
-  beat, a quarter of the vowel and at most 120 ms, then hold the second vowel. Triphthongs (iaʊ
-  iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting the glide in the onset,
-  where it's squeezed before the beat with the consonants. The apical vowels ɿ (四) and ʅ (是) are
+  the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing the first vowel as a quick
+  glide of 50 ms that ends on the beat, after the initial consonant, so the second vowel holds from
+  the beat. Triphthongs (iaʊ iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting
+  the glide in the onset as a consonant (j w ɥ), where the planner treats it as a consonant. The
+  glide is not held on the beat: sung as a vowel of its own there (it was up to 120 ms) the jaw and
+  tongue sat at its posture for 80-100 ms and the main vowel was 90% reached 200 ms after the
+  beat, so a native listener heard 两 as *li-ang* and 快 as *ku-ai*. Now the main vowel is 90%
+  reached 80-90 ms after the beat (50 ms without a medial), `tests/medials.rs`. The apical vowels ɿ (四) and ʅ (是) are
   calibrated vowels too. A vowel may say `"nasalized": true` (a combining tilde: the velum lowers for
   the whole vowel, glides included) and `"breathy": true` (a diaeresis below: the folds part-open).
 - **Sound marks** (`nasalized`, `palatalized`, `breathy`, with `aspirated`): the planner turns each

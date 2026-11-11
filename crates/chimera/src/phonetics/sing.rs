@@ -1,7 +1,8 @@
 //! Singing: syllables on notes, through the same gestural planner as speech.
 //!  - A note's vowel lands on the beat. Its onset consonants are sung just before it (they take
 //!    their time from the previous note, as singers do), its coda just before the next onset.
-//!  - Diphthongs sustain their first vowel and glide to the second at the end of the note.
+//!  - Diphthongs sustain their first vowel and glide to the second at the end of the note. A rising
+//!    one's medial glide is sung with the onset, so the main vowel holds from the beat.
 //!  - A melisma ("-") carries the vowel onto further notes; the coda waits for the last of them.
 //!  - Vibrato blooms a quarter of a second into a held vowel.
 //!
@@ -60,8 +61,16 @@ pub const SUNG_CONSONANTS: f64 = 1.25;
 /// points in English and 3.3 in Mandarin.
 const OFFGLIDE: f64 = 0.35;
 
-/// a rising diphthong's glide lasts a quarter of its vowel, at most this long (s)
-const RISING_GLIDE: f64 = 0.12;
+/// A rising nucleus's medial glide is sung as the last part of the note's onset, this long (s): a
+/// quick transition that ends on the beat, co-produced with the initial consonant (the lips round
+/// or the tongue fronts while the consonant is made), and the main vowel carries the beat. Sung on
+/// the beat as a vowel of its own (up to 120 ms, a quarter of the vowel) it was a plateau: the jaw
+/// and tongue sat at the glide's posture for 80-100 ms and the main vowel was 90% reached 200 ms
+/// after the beat, so a native listener heard 两 as li-ang, 快 as ku-ai. As an onset consonant
+/// before the consonants (the design before that) the glide was lost to the recogniser (话 hua
+/// toward 哈 ha); it follows the initial, so it keeps its own time, and is a vowel segment, so it
+/// takes the Öhman coarticulation of a vowel rather than a consonant's constriction.
+const MEDIAL_GLIDE: f64 = 0.05;
 
 /// a sung vowel keeps at least this long when a short note squeezes its consonants (s)
 const MIN_VOWEL: f64 = 0.05;
@@ -179,7 +188,19 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let start = notes[k].syl.pitch.iter().find(|b| b.at == Edge::Start).map_or(0.0, |b| b.st);
             hz_of(k) * crate::math::pow(2.0, start / 12.0)
         };
-        let mut onsets: Vec<Vec<Segment>> = (i..=j).map(|k| if melisma(&notes[k].syl) { Vec::new() } else { consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(SUNG_CONSONANTS), onset_hz(k)) }).collect();
+        let mut onsets: Vec<Vec<Segment>> = (i..=j)
+            .map(|k| {
+                if melisma(&notes[k].syl) {
+                    return Vec::new();
+                }
+                let mut on = consonants_at(&notes[k].syl.onset, o.body, o.consonant_scale.unwrap_or(SUNG_CONSONANTS), onset_hz(k));
+                // a rising nucleus's medial glide ends the onset, so it is done by the beat
+                if let Some(a) = onglide(&notes[k].syl.nucleus.ipa) {
+                    on.push(nucleus_part(a, MEDIAL_GLIDE, onset_hz(k), &notes[k].syl.nucleus));
+                }
+                on
+            })
+            .collect();
         let mut codas: Vec<Vec<Segment>> = (i..=j)
             .map(|k| if k < j && melisma(&notes[k + 1].syl) { Vec::new() } else { consonants_at(&last_of_chain(notes, k).coda, o.body, o.consonant_scale.unwrap_or(SUNG_CONSONANTS), hz_of(k)) })
             .collect();
@@ -204,16 +225,11 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             // only consonants squeezed to their floor can leave less than MIN_VOWEL
             let vdur = js_max(0.02, note_end - times[k] - total(&coda));
             segs.extend(onset);
-            // the nucleus in time: a rising on-glide short on the beat (not on a melisma's later
-            // notes), the vowel that holds, and a falling off-glide over the held part's last OFFGLIDE (not
+            // the nucleus in time: the vowel that holds from the beat (a rising nucleus's glide
+            // came with the onset), and a falling off-glide over the held part's last OFFGLIDE (not
             // when a melisma continues the vowel)
             let nuc = n.syl.nucleus.ipa.as_str();
-            let on = onglide(nuc).filter(|_| !melisma(&n.syl));
-            let g = if on.is_some() { js_min(0.25 * vdur, RISING_GLIDE) } else { 0.0 };
-            if let Some(a) = on {
-                segs.push(nucleus_part(a, g, hz, &n.syl.nucleus));
-            }
-            let rest = vdur - g;
+            let rest = vdur;
             match offglide(nuc).filter(|_| !next_melisma) {
                 Some(b) => {
                     segs.push(nucleus_part(held_vowel(nuc), rest * (1.0 - OFFGLIDE), hz, &n.syl.nucleus));
@@ -323,7 +339,7 @@ pub fn plan_note_on(syl: &Syllable, midi: f64, o: &NoteOnOptions) -> Vec<Gesture
     }
     segs.extend(consonants(&syl.onset, o.body, 0.7));
     if let Some(a) = onglide(&syl.nucleus.ipa) {
-        segs.push(nucleus_part(a, RISING_GLIDE * 0.6, hz, &syl.nucleus));
+        segs.push(nucleus_part(a, MEDIAL_GLIDE, hz, &syl.nucleus));
     }
     segs.push(nucleus_part(held_vowel(&syl.nucleus.ipa), HOLD, hz, &syl.nucleus));
     let plan = plan_utterance(&segs, &PlanOptions { body: o.body, t0: LIVE_T0, f0: Some(hz), intonation: Some(Intonation::Flat), open_end: Some(true), ..Default::default() });
