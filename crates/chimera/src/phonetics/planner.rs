@@ -448,8 +448,8 @@ const PALATAL_RAMP: f64 = 0.04;
 
 /// The tongue body's posture for a palatalized consonant: /j/'s, on the coordinates the consonant
 /// itself does not use. A velar closes with the body's height, so only its front-back
-/// place moves (fronted); a consonant with no free body coordinate (palatals, uvulars, /w/, /ɫ/,
-/// glottals) has nothing to add.
+/// place moves (fronted); a consonant with no free body coordinate (palatals, alveolo-palatals,
+/// ɥ, uvulars, /w/, /ɫ/, glottals) has nothing to add.
 fn palatal_body(def: &PhonemeDef, body: BodyMix) -> Option<ArticPatch> {
     let j = phoneme("j", body)?;
     let mut out = ArticPatch::default();
@@ -458,7 +458,10 @@ fn palatal_body(def: &PhonemeDef, body: BodyMix) -> Option<ArticPatch> {
             out.set(k, x);
         }
     }
-    (!out.is_empty() && def.place != "palatal" && def.manner != Manner::Glottal).then_some(out)
+    // (the alveolo-palatals and ɥ own both body coordinates already, so `out` is empty for them;
+    // the place is named so that stays true if their targets change)
+    let palatal = matches!(def.place, "palatal" | "alveolo-palatal" | "labial-palatal");
+    (!out.is_empty() && !palatal && def.manner != Manner::Glottal).then_some(out)
 }
 
 /// Front-to-back order of the oral places of articulation.
