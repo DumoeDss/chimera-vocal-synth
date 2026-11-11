@@ -19,18 +19,21 @@
 //!   right before the vowel (`həlˈəʊ`), the IPA convention puts them before the syllable
 //!   (`həˈləʊ`), and sonority gives `hə.ləʊ` for both. Two vowels side by side are two syllables.
 //!
-//! **Marks** read as the tokenizer reads them: stress, length `ː`, tie bars, `ʰ` and `˭`. Written
-//! as narrow transcription, an unmarked voiceless stop or affricate is unaspirated and `ʰ` makes it
-//! aspirated, so `/pa/` and `/pʰa/` contrast (the English positional rule would decide otherwise).
-//! A note's text is the syllable's IPA as the engine read it: stress, length and aspiration marks
-//! kept, tie bars dropped, `ɡ` shown as `g`.
+//! **Marks** read as the tokenizer reads them: stress, length `ː`, tie bars, `ʰ` and `˭`, and the
+//! marks that change how a sound is made: a combining tilde on a vowel (`/bɔ̃ʒuʁ/`: nasalized), `ʲ`
+//! on a consonant (palatalized), `ʱ` on a voiced stop or affricate and a diaeresis below on a vowel
+//! (breathy); see `docs/architecture.md`. Written as narrow transcription, an unmarked voiceless
+//! stop or affricate is unaspirated and `ʰ` makes it aspirated, so `/pa/` and `/pʰa/` contrast (the
+//! English positional rule would decide otherwise). A note's text is the syllable's IPA as the
+//! engine read it: stress, length and all these marks kept, tie bars dropped, `ɡ` shown as `g`.
 //!
 //! **Nothing vanishes silently.** The tokenizer drops symbols it does not know and combining marks
-//! it does not model; a symbol it knows but the planner has no sound for (`ʏ`) is dropped here. A
-//! word with no vowel is not sung. [`ipa_lyric_report`] lists all of these for a lyric.
+//! it does not model (a devoicing ring, a tilde on a consonant), and a mark it reads but cannot
+//! apply (`ʲ` after a vowel); a symbol it knows but the planner has no sound for (`ʏ`) is dropped
+//! here. A word with no vowel is not sung. [`ipa_lyric_report`] lists all of these for a lyric.
 
 use super::inventory::{Glottal, Manner, PhonemeDef, Voicing, phoneme};
-use super::ipa::{ignored_ipa_marks, known_ipa_symbols, tokenize_ipa, unknown_ipa};
+use super::ipa::{SOUND_MARKS, ignored_ipa_marks, known_ipa_symbols, mark_applies, tokenize_ipa, unknown_ipa};
 use super::planner::is_vowel;
 use super::syllables::{FrontEnd, Token, lyric_tokens};
 use super::{Segment, Syllable};
@@ -108,14 +111,18 @@ struct Seg {
     kind: Kind,
 }
 
-/// Stress, length and aspiration marks, as the tokenizer took them.
+/// Length and the sound marks, as the tokenizer took them: a tilde or a diaeresis below right after
+/// the vowel it marks, `ʰ ˭ ʲ ʱ` after the consonant.
 fn typed(s: &Segment) -> String {
-    let mark = match s.aspirated {
+    let aspirated = match s.aspirated {
         Some(true) => "ʰ",
         Some(false) => "˭",
         None => "",
     };
-    format!("{}{}{mark}", s.ipa, if s.dur.is_some() { "ː" } else { "" })
+    let vowel = is_vowel(&s.ipa, BodyMix::MALE);
+    let (tilde, below) = (if s.nasalized == Some(true) { "\u{303}" } else { "" }, if s.breathy == Some(true) && vowel { "\u{324}" } else { "" });
+    let (soft, breathy) = (if s.palatalized == Some(true) { "ʲ" } else { "" }, if s.breathy == Some(true) && !vowel { "ʱ" } else { "" });
+    format!("{}{tilde}{below}{}{aspirated}{soft}{breathy}", s.ipa, if s.dur.is_some() { "ː" } else { "" })
 }
 
 /// The pieces a word is read in: it breaks at `.` `,` `|` (dropped).
@@ -203,6 +210,21 @@ pub fn sung_symbols() -> Vec<&'static str> {
     known_ipa_symbols().into_iter().filter(|s| kind(s) != Kind::Silent).collect()
 }
 
+/// A mark the engine sings, and the sung symbols it is realised on.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct SungMark {
+    pub mark: String,
+    pub on: Vec<&'static str>,
+}
+
+/// Every mark the tokenizer reads that changes how a sound is made (`ʰ ˭ ʲ ʱ`, the combining tilde
+/// and diaeresis below), each with the sung symbols it applies to. Tools that convert other IPA
+/// (`tools/text-to-ipa.ts`) read this, so a mark the engine gains is kept, not stripped.
+pub fn sung_marks() -> Vec<SungMark> {
+    let sung = sung_symbols();
+    SOUND_MARKS.iter().map(|&m| SungMark { mark: m.to_string(), on: sung.iter().copied().filter(|s| mark_applies(m, s)).collect() }).collect()
+}
+
 /// What an IPA lyric asks for that the engine does not sing as written.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct IpaReport {
@@ -210,7 +232,8 @@ pub struct IpaReport {
     pub unknown: Vec<String>,
     /// symbols the tokenizer knows but the planner has no sound for (dropped)
     pub no_sound: Vec<String>,
-    /// letters with a combining mark the engine does not model (the letter is sung, the mark is not)
+    /// letters with a mark the engine does not model or cannot apply there (the letter is sung, the
+    /// mark is not)
     pub ignored_marks: Vec<String>,
     /// words with no vowel (not sung), as typed between their slashes
     pub no_vowel: Vec<String>,
@@ -230,7 +253,7 @@ impl IpaReport {
         };
         line("symbols the engine does not know (not sung)", &self.unknown);
         line("symbols the engine has no sound for (not sung)", &self.no_sound);
-        line("marks the engine does not model (the letter is sung without them)", &self.ignored_marks);
+        line("marks the engine does not model, or cannot apply there (the letter is sung without them)", &self.ignored_marks);
         line("words with no vowel (not sung)", &self.no_vowel);
         out
     }

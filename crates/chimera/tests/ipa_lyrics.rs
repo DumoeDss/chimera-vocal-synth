@@ -3,7 +3,7 @@
 use chimera::anatomy::human::{BODY_FEMALE, BODY_MALE, HumanBody};
 use chimera::phonetics::english::arpabet_to_segments;
 use chimera::phonetics::ipa::{ignored_ipa_marks, tokenize_ipa, unknown_ipa};
-use chimera::phonetics::ipa_lyrics::{ipa_lyric_report, sung_symbols};
+use chimera::phonetics::ipa_lyrics::{ipa_lyric_report, sung_marks, sung_symbols};
 use chimera::phonetics::sing::{SongOptions, SungNote, plan_song};
 use chimera::phonetics::syllables::lyrics_to_syllables;
 use chimera::phonetics::{Plan, Segment, Syllable};
@@ -74,12 +74,38 @@ fn syllables_split_by_sonority_in_several_languages() {
 }
 
 #[test]
-fn french_nasals_lose_their_tilde_and_say_so() {
-    // the tokenizer skips the combining tilde: ɔ̃ is sung as ɔ (no nasal vowel in the inventory)
+fn french_nasal_vowels_are_sung_nasalized() {
+    // the combining tilde makes ɔ̃ a nasalized ɔ, with nothing to report; the note shows it
     assert_eq!(split("/bɔ̃ʒuʁ/"), "bɔ.ʒuʁ");
-    assert_eq!(ipa_lyric_report("/bɔ̃ʒuʁ/").ignored_marks, ["ɔ̃"]);
-    // a precomposed ã is a symbol the engine doesn't know: dropped, and reported
-    assert_eq!(ipa_lyric_report("/lã/").unknown, ["ã"]);
+    let s = syls("/bɔ̃ʒuʁ/");
+    assert_eq!(s.iter().map(|s| s.nucleus.nasalized).collect::<Vec<_>>(), [Some(true), None]);
+    assert_eq!(shown("/bɔ̃ʒuʁ/"), ["bɔ\u{303}", "ʒuʁ"]);
+    assert!(ipa_lyric_report("/bɔ̃ʒuʁ/").is_empty());
+    // a precomposed ã is the same vowel (NFC makes it one code point), not an unknown symbol
+    let r = ipa_lyric_report("/lã/");
+    assert!(r.unknown.is_empty() && r.ignored_marks.is_empty());
+    assert_eq!(syls("/lã/")[0].nucleus.nasalized, Some(true));
+    // and what a note shows reads back as the same syllable
+    assert_eq!(syls(&format!("/{}/", shown("/bɔ̃ʒuʁ/").concat())), s);
+}
+
+#[test]
+fn palatalized_and_breathy_sounds_are_sung_and_shown() {
+    // Russian-style ʲ on an onset and a coda, Hindi-style ʱ on a voiced stop, a breathy vowel
+    let s = syls("/ˈtʲat bʱa ɛ̤/");
+    assert_eq!(s[0].onset[0].palatalized, Some(true));
+    assert_eq!(s[0].coda[0].palatalized, None);
+    assert_eq!((s[1].onset[0].ipa.as_str(), s[1].onset[0].breathy), ("b", Some(true)));
+    assert_eq!((s[2].nucleus.ipa.as_str(), s[2].nucleus.breathy), ("ɛ", Some(true)));
+    assert_eq!(shown("/ˈtʲat bʱa ɛ̤/"), ["ˈtʲat", "bʱa", "ɛ\u{324}"]);
+    assert!(ipa_lyric_report("/ˈtʲat bʱa ɛ̤/").is_empty());
+    // sung: the planner gets the gestures
+    let notes: Vec<SungNote> = syls("/ˈtʲat bʱa ɛ̤/").into_iter().map(|syl| SungNote { midi: 60.0, beats: 1.0, syl }).collect();
+    let plan = plan_song(&notes, &SongOptions { body: "male".into(), bpm: 100.0, t0: 0.4, vibrato: 0.0, ..Default::default() });
+    let count = |label: &str| plan.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == label)).count();
+    assert_eq!((count("palatalized"), count("breathy")), (1, 2));
+    // a mark on a sound it does not apply to is reported, not dropped quietly
+    assert_eq!(ipa_lyric_report("/ˈaʲ pʱa/").ignored_marks, ["aʲ", "pʱ"]);
 }
 
 #[test]
@@ -150,8 +176,9 @@ fn a_word_with_no_vowel_is_dropped_and_reported() {
 #[test]
 fn symbols_the_engine_does_not_know_are_reported_not_dropped_quietly() {
     assert_eq!(unknown_ipa("ˈʃøːn"), Vec::<String>::new());
-    assert_eq!(unknown_ipa("Ŋa ã ǀa Ŋ"), ["Ŋ", "ã", "ǀ"]);
-    assert_eq!(ignored_ipa_marks("n̥ ɔ̃ n̥"), ["n̥", "ɔ̃"]);
+    assert_eq!(unknown_ipa("Ŋa ã ǀa Ŋ"), ["Ŋ", "ǀ"]);
+    // a ring is not modelled; the tilde of a nasal vowel is read, the tilde of a consonant is not
+    assert_eq!(ignored_ipa_marks("n̥ ɔ̃ n̥ m̃"), ["n̥", "m̃"]);
     // tokenize_ipa itself is unchanged: the unknown ones are still dropped
     assert_eq!(tokenize_ipa("Ŋa").len(), 1);
     // ʏ is a letter the tokenizer reads, but the planner has no vowel for it: reported, not sung
@@ -168,6 +195,31 @@ fn symbols_the_engine_does_not_know_are_reported_not_dropped_quietly() {
     let sung = sung_symbols();
     assert!(sung.contains(&"ʃ") && sung.contains(&"ø") && sung.contains(&"ɔɪ"));
     assert!(!sung.contains(&"ʏ"));
+}
+
+#[test]
+fn the_marks_the_engine_reads_are_listed_with_where_they_apply() {
+    let marks = sung_marks();
+    let on = |m: &str| marks.iter().find(|x| x.mark == m).unwrap_or_else(|| panic!("{m:?} not listed")).on.clone();
+    assert_eq!(marks.len(), 6);
+    // vowels for the combining marks, only symbols the engine sings (no ʏ)
+    for m in ["\u{303}", "\u{324}"] {
+        assert!(on(m).contains(&"ɔ") && on(m).contains(&"aɪ") && !on(m).contains(&"ʏ") && !on(m).contains(&"b"), "{m:?}");
+    }
+    assert!(on("ʲ").contains(&"t") && on("ʲ").contains(&"l") && !on("ʲ").contains(&"h") && !on("ʲ").contains(&"a"));
+    assert!(on("ʱ").contains(&"b") && on("ʱ").contains(&"dʒ") && !on("ʱ").contains(&"p") && !on("ʱ").contains(&"z"));
+    assert!(on("ʰ").contains(&"p") && on("ʰ").contains(&"tʃ") && !on("ʰ").contains(&"b"));
+    // the list is what the tokenizer does (the aspiration marks aside, which it sets anywhere): every
+    // listed (mark, symbol) sets a flag, and no other does
+    for m in marks.iter().filter(|m| !matches!(m.mark.as_str(), "ʰ" | "˭")) {
+        for s in sung_symbols() {
+            let toks = tokenize_ipa(&format!("{s}{}", m.mark));
+            // (a consonant with a tilde, n + U+0303, composes to ñ and is dropped: no flag, nothing listed)
+            let Some(seg) = toks.first() else { assert!(!m.on.contains(&s), "{s}{}", m.mark); continue };
+            let set = seg.aspirated.is_some() || seg.nasalized.is_some() || seg.palatalized.is_some() || seg.breathy.is_some();
+            assert_eq!(set, m.on.contains(&s), "{s}{}", m.mark);
+        }
+    }
 }
 
 #[test]

@@ -66,6 +66,17 @@ export function ipaSymbols(): string[] {
   return call("ipaSymbols", {});
 }
 
+/** A mark the engine reads (`ʰ ˭ ʲ ʱ`, a combining tilde, a diaeresis below) and the symbols it applies to. */
+export interface IpaMark {
+  mark: string;
+  on: string[];
+}
+
+/** The marks the engine reads on the symbols it sings. */
+export function ipaMarks(): IpaMark[] {
+  return call("ipaMarks", {});
+}
+
 /**
  * English text → phonemes: CMUdict once loaded (fetched and gunzipped here, parsed by the
  * engine), letter-to-sound rules until then. One dictionary per page (the engine keeps it).

@@ -12,7 +12,7 @@ use chimera::phonetics::beatbox::{self, BeatStep};
 use chimera::phonetics::planner::{self, PhraseInput, PlanOptions};
 use chimera::phonetics::sing::{self, MelismaOptions, NoteOnOptions, SongOptions, SungNote};
 use chimera::phonetics::english::EnglishG2P;
-use chimera::phonetics::ipa_lyrics::{IpaLyrics, sung_symbols};
+use chimera::phonetics::ipa_lyrics::{IpaLyrics, sung_marks, sung_symbols};
 use chimera::phonetics::japanese::Japanese;
 use chimera::phonetics::korean::Korean;
 use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin};
@@ -126,6 +126,8 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
         // ---------------------------------------------------------------- text → phonemes
         // the IPA symbols the engine can sing (tools that convert other IPA to it read this)
         "ipaSymbols" => to_json(&sung_symbols()),
+        // the marks it reads on those symbols (ʰ ˭ ʲ ʱ, a tilde, a diaeresis below), with where each applies
+        "ipaMarks" => to_json(&sung_marks()),
         "tokenizeIpa" => to_json(&ipa::tokenize_ipa(&arg::<String>(req, "text")?)),
         "g2pLoad" => {
             st.g2p.load_dict(&arg::<String>(req, "text")?);

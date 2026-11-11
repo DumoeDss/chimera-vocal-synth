@@ -139,7 +139,7 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
         }
         // palatalization, on a consonant made with a mouth gesture (not a glottal one)
         if ch == 'ʲ' {
-            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.manner != Manner::Glottal)) {
+            match out.last_mut().filter(|l| mark_applies('ʲ', &l.ipa)) {
                 Some(last) => last.palatalized = Some(true),
                 None => gaps.ignore(out.last(), ch),
             }
@@ -148,7 +148,7 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
         }
         // a breathy-voiced release, on a voiced stop or affricate (Hindi bʱ dʱ gʱ)
         if ch == 'ʱ' {
-            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.voicing == Voicing::Voiced && matches!(c.manner, Manner::Stop | Manner::Affricate))) {
+            match out.last_mut().filter(|l| mark_applies('ʱ', &l.ipa)) {
                 Some(last) => last.breathy = Some(true),
                 None => gaps.ignore(out.last(), ch),
             }
@@ -157,7 +157,7 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
         }
         // a vowel mark after the length mark instead of the vowel (ɛː̃)
         if (ch == NASALIZED || ch == BREATHY) && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
-            match out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
+            match out.last_mut().filter(|l| mark_applies(ch, &l.ipa)) {
                 Some(last) if ch == NASALIZED => last.nasalized = Some(true),
                 Some(last) => last.breathy = Some(true),
                 None => gaps.ignore(out.last(), ch),
@@ -216,6 +216,24 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
     }
     out
 }
+
+/// Whether the tokenizer reads `mark` (one of `ʰ ˭ ʲ ʱ`, a combining tilde, a combining diaeresis
+/// below) on the sound `ipa`, and the planner realises it there: a voiceless stop or affricate for
+/// the aspiration marks, a consonant with a mouth gesture for `ʲ`, a voiced stop or affricate for
+/// `ʱ`, a vowel for the two combining marks. A mark on any other sound is ignored (and reported).
+pub fn mark_applies(mark: char, ipa: &str) -> bool {
+    let stop_or_affricate = |c: &PhonemeDef| matches!(c.manner, Manner::Stop | Manner::Affricate);
+    match mark {
+        'ʰ' | '˭' => consonant(ipa).is_some_and(|c| c.voicing == Voicing::Voiceless && stop_or_affricate(c)),
+        'ʲ' => consonant(ipa).is_some_and(|c| c.manner != Manner::Glottal),
+        'ʱ' => consonant(ipa).is_some_and(|c| c.voicing == Voicing::Voiced && stop_or_affricate(c)),
+        NASALIZED | BREATHY => is_vowel_token(ipa),
+        _ => false,
+    }
+}
+
+/// The marks `mark_applies` knows, in the order a person would list them.
+pub const SOUND_MARKS: [char; 6] = ['ʰ', '˭', 'ʲ', 'ʱ', NASALIZED, BREATHY];
 
 fn consonant(ipa: &str) -> Option<&'static PhonemeDef> {
     super::inventory::consonants().iter().find(|c| c.ipa == ipa)
