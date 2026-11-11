@@ -2,9 +2,11 @@
 //! (male and female bodies) and measured against the engine's own neighbours.
 use chimera::analysis::fft::{Fft, hann, power_spectrum_db};
 use chimera::analysis::lpc::{FormantOpts, estimate_formants};
-use chimera::anatomy::human::{BODY_FEMALE, BODY_MALE, HumanBody};
-use chimera::phonetics::planner::{PlanOptions, plan_utterance};
+use chimera::anatomy::human::{ArticKey, BODY_FEMALE, BODY_MALE, BodyMix, HumanBody, NEUTRAL};
+use chimera::phonetics::inventory::phoneme;
+use chimera::phonetics::planner::{PlanOptions, plan_utterance, vowel_table};
 use chimera::phonetics::{Intonation, Plan, Segment};
+use chimera::voice::human_airway::HumanAirway;
 use chimera::voice::human_voice::{HumanVoice, SourcePatch, oversample_for};
 
 const FS: f64 = 48000.0;
@@ -106,32 +108,91 @@ fn mean5(r: &Rendered, f: impl Fn(f64) -> f64) -> f64 {
 }
 
 #[test]
-fn the_voiceless_alveolo_palatal_fricative_is_noise_and_sits_near_esh_and_well_below_s() {
+fn the_voiceless_alveolo_palatal_fricative_is_noise_between_esh_and_s() {
     // The spectral centroid (Hz, 2-12 kHz, mean of five 21 ms windows across the middle of a
     // 200 ms consonant), the 3-12 kHz level against the 100-1000 Hz level (dB), the voicing:
-    //   male   ʃ 4100   ɕ 3975   s 4987;  ɕ +41 dB over the low band, voicing 0.00
-    //   female ʃ 3868   ɕ 4324   s 5827;  ɕ +40 dB over the low band, voicing 0.00
-    // The order ʃ < ɕ < s holds for the female body (ɕ 456 Hz above ʃ) but not the male: there ɕ
-    // sits 125 Hz (3 %) below ʃ. Reported, not tuned (#32 step 3). Asserted: ɕ is well below s
-    // (by 1000 and 1500 Hz) and near ʃ, above it for the female body.
+    //   male   ʃ 4100   ɕ 4503   s 4987   (ɕ 9.8 % above ʃ, 484 Hz under s)
+    //   female ʃ 3868   ɕ 5158   s 5827   (ɕ 33 % above ʃ, 669 Hz under s)
+    // (As first defined, with the tip making the constriction, ɕ sat 125 Hz below ʃ on the male
+    // body and 456 Hz above it on the female.) ɕ is voiceless, voicing 0.00, with the high band
+    // 37 / 40 dB over the low band; its 3-12 kHz level is 25.4 against ʃ's 15.9 dB (male) and
+    // 16.9 against 8.1 dB (female).
     for (body, name, f0) in VOICES {
         let centroid = |c: &str| {
             let r = say(c, body, name, f0);
             mean5(&r, |t| r.centroid(t, 2000.0, 12000.0))
         };
         let (sh, c, s) = (centroid("ʃ"), centroid("ɕ"), centroid("s"));
-        println!("{name}: centroid ʃ {sh:.0}, ɕ {c:.0}, s {s:.0} Hz");
-        assert!(c < s - 600.0, "{name}: ɕ {c:.0} Hz against s {s:.0} Hz");
-        assert!(c > sh * 0.9 && c < sh * 1.2, "{name}: ɕ {c:.0} Hz against ʃ {sh:.0} Hz");
-        if name == "female" {
-            assert!(c > sh + 200.0, "{name}: ɕ {c:.0} Hz against ʃ {sh:.0} Hz");
-        }
+        println!("{name}: centroid ʃ {sh:.0}, ɕ {c:.0}, s {s:.0} Hz ({:+.1} % over ʃ)", 100.0 * (c / sh - 1.0));
+        assert!(c > sh * 1.05, "{name}: ɕ {c:.0} Hz against ʃ {sh:.0} Hz");
+        assert!(c < s - 250.0, "{name}: ɕ {c:.0} Hz against s {s:.0} Hz");
         let r = say("ɕ", body, name, f0);
         let (a, b) = r.middle();
         let noise = mean5(&r, |t| r.level(t, 3000.0, 12000.0) - r.level(t, 100.0, 1000.0));
-        println!("{name}: ɕ frication {noise:.1} dB over the low band, voicing {:.2}", r.voicing_between(a, b));
+        let hi = mean5(&r, |t| r.level(t, 3000.0, 12000.0));
+        let esh = say("ʃ", body, name, f0);
+        let hi_esh = mean5(&esh, |t| esh.level(t, 3000.0, 12000.0));
+        println!("{name}: ɕ frication {noise:.1} dB over the low band, voicing {:.2}, high band {hi:.1} dB (ʃ {hi_esh:.1})", r.voicing_between(a, b));
         assert!(noise > 25.0, "{name}: ɕ has {noise:.1} dB of high band over low band");
         assert!(r.voicing_between(a, b) < 0.1, "{name}: ɕ is voiced");
+        assert!(hi > hi_esh, "{name}: ɕ is quieter than ʃ ({hi:.1} against {hi_esh:.1} dB)");
+    }
+}
+
+#[test]
+fn a_vowel_after_the_alveolo_palatal_starts_from_a_palatal_locus() {
+    // The 1.2-3.5 kHz centre of gravity of the 21 ms centred 40 ms after the consonant's release
+    // (Hz; it follows F2 and F3 of the /a/ as they come off the consonant, and unlike LPC it holds
+    // for the female body), after ʃ ɕ ç and j:
+    //   male   ʃ 1697   ɕ 2088   ç 2100   j 2083
+    //   female ʃ 1741   ɕ 2409   ç 2356   j 2420
+    // ɕ lands where ç and j do, 391 / 668 Hz above ʃ, and the locus is gone by 150 ms.
+    for (body, name, f0) in VOICES {
+        let locus = |c: &str, after: f64| {
+            let r = say(c, body, name, f0);
+            r.centroid(r.plan.segments[1].t1 + after, 1200.0, 3500.0)
+        };
+        let (sh, c, ch, j) = (locus("ʃ", 0.04), locus("ɕ", 0.04), locus("ç", 0.04), locus("j", 0.04));
+        let settled = locus("ɕ", 0.15);
+        println!("{name}: locus after ʃ {sh:.0}, ɕ {c:.0}, ç {ch:.0}, j {j:.0}; ɕ then {settled:.0} Hz");
+        assert!(c > sh + 250.0, "{name}: after ɕ {c:.0} Hz, after ʃ {sh:.0} Hz");
+        assert!(c > sh + 0.6 * (ch - sh), "{name}: after ɕ {c:.0} Hz; ʃ {sh:.0}, ç {ch:.0}");
+        assert!(settled < c - 250.0, "{name}: {settled:.0} Hz at 150 ms, {c:.0} at 40 ms");
+    }
+}
+
+/// Where the narrowest oral section of `c` lies (cm behind the incisors) and its area (cm²), in the
+/// calibration's context (/ɑ/, jaw 0.55), and how far the narrow part (under three times the
+/// minimum) reaches toward the teeth.
+fn narrowest(c: &str, body: HumanBody, name: &str, mix: BodyMix) -> (f64, f64, f64) {
+    let mut ctx = vowel_table()[name]["ɑ"].artic.apply_to(&NEUTRAL);
+    ctx.set(ArticKey::Jaw, 0.55);
+    let art = phoneme(c, mix).unwrap().targets.apply_to(&ctx);
+    let mut air = HumanAirway::new(96000.0, body);
+    let f = air.apply(&art, 0.0).clone();
+    let oral: Vec<_> = f.grid.iter().filter(|g| g.region >= 2).collect();
+    let at = oral.iter().min_by(|a, b| a.area.total_cmp(&b.area)).unwrap();
+    let front = oral.iter().filter(|g| g.area < 3.0 * at.area && g.area < 0.7).map(|g| g.s).fold(f64::MIN, f64::max);
+    ((f.teeth_s - at.s) / body.scale, at.area, (f.teeth_s - front) / body.scale)
+}
+
+#[test]
+fn the_alveolo_palatal_constriction_is_in_front_of_the_palatal_one() {
+    // The narrowest section, cm behind the incisors (the area in cm², then the front end of the
+    // narrow stretch, cm behind the incisors), and the centroid (Hz, 2-12 kHz):
+    //   male   ɕ 2.32 (0.170, to 1.74)  centroid 4503;  ç 4.34 (0.140, to 2.11)  centroid 8632
+    //   female ɕ 2.31 (0.138, to 1.75)  centroid 5158;  ç 4.35 (0.113, to 2.12)  centroid 7933
+    // (ʃ is at 2.74 and ʂ at 3.3 cm: the blade makes the gap, a stretch of 1.4-1.8 cm of it.)
+    for (body, name, f0, mix) in [(BODY_MALE, "male", 112.0, BodyMix::MALE), (BODY_FEMALE, "female", 205.0, BodyMix::FEMALE)] {
+        let (x, area, front) = narrowest("ɕ", body, name, mix);
+        let (px, _, _) = narrowest("ç", body, name, mix);
+        println!("{name}: ɕ narrowest {x:.2} cm behind the incisors ({area:.3} cm², narrow to {front:.2}); ç at {px:.2}");
+        assert!(x < px - 1.5, "{name}: ɕ at {x:.2} cm, ç at {px:.2} cm");
+        let target = 0.17 * body.scale * body.scale;
+        assert!((0.9 * target..1.1 * target).contains(&area), "{name}: area {area}");
+        let (cx, cc) = (say("ɕ", body, name, f0), say("ç", body, name, f0));
+        let (a, b) = (mean5(&cx, |t| cx.centroid(t, 2000.0, 12000.0)), mean5(&cc, |t| cc.centroid(t, 2000.0, 12000.0)));
+        assert!(a < b - 2000.0, "{name}: ɕ {a:.0} Hz, ç {b:.0} Hz");
     }
 }
 
@@ -157,10 +218,10 @@ fn the_voiced_alveolo_palatal_fricative_is_voiced_with_frication_on_top() {
 fn an_affricate_closes_and_then_frictions() {
     // The oral tract is sealed in the first third and open (0.05-0.13 cm²) in the last; the 3-12 kHz
     // level (dB) is quiet at 25 % of the sound and loud at 95 %, as for the engine's own tʃ:
-    //   male   tɕ -42 -> 26, tʂ -9 -> 10, tʃ -5 -> 17;  female tɕ -61 -> 17, tʂ -11 -> 2, tʃ -14 -> 10
+    //   male   tɕ -23 -> 18, tʂ -9 -> 10, tʃ -5 -> 17;  female tɕ -25 -> 10, tʂ -11 -> 2, tʃ -14 -> 10
     // (tʂ's closure window picks up the vowel's tail, so its rise is the smallest.)
     for (body, name, f0) in VOICES {
-        for (c, rise) in [("tɕ", 30.0), ("tʂ", 8.0), ("tʃ", 8.0)] {
+        for (c, rise) in [("tɕ", 25.0), ("tʂ", 8.0), ("tʃ", 8.0)] {
             let r = say(c, body, name, f0);
             let s = &r.plan.segments[1];
             let d = s.t1 - s.t0;
@@ -177,7 +238,7 @@ fn an_affricate_closes_and_then_frictions() {
         let v = r.voicing_between(a, b);
         println!("{name}: tɕ voicing {v:.2}");
         assert!(v < 0.1, "{name}: tɕ is voiced ({v:.2})");
-        // and the voiced ones have the voice on through the closure (0.58 to 0.76 in the middle 60 %, against 0.00-0.01 for tɕ)
+        // and the voiced ones have the voice on through the closure (0.71 to 0.97 in the middle 60 %, against 0.00-0.01 for tɕ)
         for c in ["dʑ", "dʐ"] {
             let r = say(c, body, name, f0);
             let (a, b) = r.middle();

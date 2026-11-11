@@ -147,7 +147,10 @@ branching (nasal tract, sinuses, piriform fossae, two bronchi, vocal sacs, OEC).
   the vowel. A mark on a sound it doesn't apply to is ignored, and with no flag set the plan is
   the one English always had. Other IPA diacritics are still dropped.
 * Alveolo-palatals and ɥ ([#32](https://github.com/jamesondh/chimera-vocal-synth/issues/32)
-  step 3, consonants): the inventory has ɕ ʑ (laminal fricatives, calibrated like ʃ), the
+  step 3, consonants): the inventory has ɕ ʑ (the blade and front of the tongue body make the gap,
+  1.7-3.2 cm behind the incisors, calibrated on the body height; the tip is up behind the ridge,
+  a little under /s/'s, so a front cavity remains; the body gesture is released slowly, like ç's,
+  which leaves a palatal F2 locus on the vowel), the
   affricates tɕ dʑ tʂ dʐ (one segment, with or without a tie bar, released into ɕ ʑ ʂ ʐ) and ɥ
   (/j/ with /w/'s rounding). The sound marks apply to them as to other consonants, except ʲ, which
   adds nothing to a sound whose own gesture already holds the tongue body at /j/'s place. The

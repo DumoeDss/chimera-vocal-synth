@@ -145,8 +145,8 @@ const PAL_STOP: Tg = &[(TbX, 3.75), (TbY, 8.45)];
 const VEL_STOP: Tg = &[(TbX, 2.3), (TbY, 8.35), (Jaw, 0.7)];
 const UVU_STOP: Tg = &[(TbX, 1.55), (TbY, 7.6)];
 const NONE: Tg = &[];
-const ALVPAL_FRIC: Tg = &[(TtX, 5.85), (TtY, 9.5), (TbX, 3.6), (TbY, 7.75), (Jaw, 0.3), (LipProt, 0.0), (LipWidth, 0.7)];
-const ALVPAL_STOP: Tg = &[(TtX, 5.85), (TtY, 10.0), (TbX, 3.6), (TbY, 8.1), (LipProt, 0.0), (LipWidth, 0.7)];
+const ALVPAL_FRIC: Tg = &[(TtX, 5.85), (TtY, 9.0), (TbX, 4.0), (TbY, 7.85), (Jaw, 0.3), (LipProt, 0.0), (LipWidth, 0.7)];
+const ALVPAL_STOP: Tg = &[(TtX, 5.85), (TtY, 10.0), (TbX, 4.0), (TbY, 8.4), (LipProt, 0.0), (LipWidth, 0.7)];
 
 const TIP_CURL: &[ArticKey] = &[TtX, TtY, TtCurl];
 
@@ -206,12 +206,16 @@ fn base() -> Vec<PhonemeDef> {
         c("tʃ", "voiceless postalveolar affricate", M::Affricate, Voiceless, "postalveolar", tg(POSTALV_STOP, &[(LipProt, 0.75), (LipWidth, 0.2)]), &[TtX, TtY, LipProt, LipWidth], 0.15).rel("ʃ"),
         c("dʒ", "voiced postalveolar affricate", M::Affricate, Voiced, "postalveolar", tg(POSTALV_STOP, &[(LipProt, 0.75), (LipWidth, 0.2)]), &[TtX, TtY, LipProt, LipWidth], 0.13).rel("ʒ"),
         // Mandarin: alveolo-palatal fricatives and affricates (x, j, q), retroflex
-        // affricates (zh, ch). Laminal: the blade and front of the body raised behind the ridge,
-        // lips spread (rounding comes from the vowel)
-        c("ɕ", "voiceless alveolo-palatal fricative", M::Fricative, Voiceless, "alveolo-palatal", t(ALVPAL_FRIC), &[TtX, TtY, TbX, TbY, Jaw, LipProt, LipWidth], 0.12).cal(0.17, TtY),
-        c("ʑ", "voiced alveolo-palatal fricative", M::Fricative, Voiced, "alveolo-palatal", t(ALVPAL_FRIC), &[TtX, TtY, TbX, TbY, Jaw, LipProt, LipWidth], 0.09).cal(0.19, TtY),
-        c("tɕ", "voiceless alveolo-palatal affricate", M::Affricate, Voiceless, "alveolo-palatal", t(ALVPAL_STOP), &[TtX, TtY, TbX, TbY, LipProt, LipWidth], 0.14).rel("ɕ"),
-        c("dʑ", "voiced alveolo-palatal affricate", M::Affricate, Voiced, "alveolo-palatal", t(ALVPAL_STOP), &[TtX, TtY, TbX, TbY, LipProt, LipWidth], 0.12).rel("ʑ"),
+        // affricates (zh, ch). The alveolo-palatals are laminal: the gap is made by the blade and the
+        // front of the tongue body (the body is the dominant articulator, calibrated on its
+        // height, and released slowly like ç's, so the vowel starts from a palatal locus), 1.7-3.2 cm
+        // behind the incisors, lips spread (rounding comes from the vowel). The tip stays up behind
+        // the ridge, a little under /s/'s: with it down at the vowels' rest position the narrow
+        // channel runs on to the teeth with no front cavity, and the noise centroid rises past /s/'s
+        c("ɕ", "voiceless alveolo-palatal fricative", M::Fricative, Voiceless, "alveolo-palatal", t(ALVPAL_FRIC), &BODY, 0.12).cal(0.17, TbY),
+        c("ʑ", "voiced alveolo-palatal fricative", M::Fricative, Voiced, "alveolo-palatal", t(ALVPAL_FRIC), &BODY, 0.09).cal(0.19, TbY),
+        c("tɕ", "voiceless alveolo-palatal affricate", M::Affricate, Voiceless, "alveolo-palatal", t(ALVPAL_STOP), &BODY, 0.14).rel("ɕ"),
+        c("dʑ", "voiced alveolo-palatal affricate", M::Affricate, Voiced, "alveolo-palatal", t(ALVPAL_STOP), &BODY, 0.12).rel("ʑ"),
         c("tʂ", "voiceless retroflex affricate", M::Affricate, Voiceless, "retroflex", t(RETRO_STOP), TIP_CURL, 0.14).rel("ʂ"),
         c("dʐ", "voiced retroflex affricate", M::Affricate, Voiced, "retroflex", t(RETRO_STOP), TIP_CURL, 0.12).rel("ʐ"),
         c("pf", "voiceless labiodental affricate", M::Affricate, Voiceless, "labiodental", t(BILABIAL), &LIPS, 0.14).rel("f"),
