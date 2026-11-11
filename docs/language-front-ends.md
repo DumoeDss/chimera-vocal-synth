@@ -96,16 +96,20 @@ unclosed slash is dropped.
   `/ˈasta/` is `as.ta`, and `/ˈtʃaːo/` is `tʃaː.o`. This is a rule, not a language: write a `.` where
   a language says otherwise (`/ˈa.spa/`). `,` and `|` break too. Stress marks do not move a break
   (eSpeak NG puts them before the vowel, the IPA convention before the syllable).
-- **Marks:** stress `ˈ ˌ`, length `ː`, tie bars, and `ʰ` / `˭` for aspiration. IPA lyrics are
-  narrow transcription: an unmarked voiceless stop or affricate is unaspirated, so `/pa/` and `/pʰa/`
-  contrast, instead of English's positional rule deciding. A note's text is the syllable's IPA as the
-  engine read it (tie bars gone, `ɡ` shown as `g`).
-- **Nothing is dropped silently.** The engine has no nasal vowels, no devoicing, no `ʏ` or `ɜ`, and the
-  tokenizer drops what it doesn't know. `chimera syllables` and `render notes` print a warning on
-  stderr naming the symbols it doesn't know, the symbols it has no sound for, the combining marks it
-  ignores (`ɔ̃` is sung `ɔ`) and the words with no vowel (not sung). In code, `unknown_ipa`,
-  `ignored_ipa_marks` and `ipa_lyric_report` (the crate), `sung_symbols` for what can be written.
-  Sing mode does not show these yet.
+- **Marks:** stress `ˈ ˌ`, length `ː`, tie bars, and the marks that change how a sound is made:
+  `ʰ` / `˭` for aspiration, a combining tilde on a vowel (`/bɔ̃ʒuʁ/`, nasalized), `ʲ` after a
+  consonant (palatalized), `ʱ` after a voiced stop or affricate and a combining diaeresis below on a
+  vowel (breathy); "The one format" says what each does. IPA lyrics are narrow transcription: an
+  unmarked voiceless stop or affricate is unaspirated, so `/pa/` and `/pʰa/` contrast, instead of
+  English's positional rule deciding. A note's text is the syllable's IPA as the engine read it
+  (marks kept, tie bars gone, `ɡ` shown as `g`).
+- **Nothing is dropped silently.** The engine has no devoicing, no `ʏ` or `ɜ`, and the tokenizer drops
+  what it doesn't know. `chimera syllables` and `render notes` print a warning on stderr naming the
+  symbols it doesn't know, the symbols it has no sound for, the marks it ignores (a ring on `n̥`, a
+  tilde on a consonant) or can't apply (`ʲ` after a vowel), and the words with no vowel (not sung).
+  A nasal vowel is not reported: it is sung nasal. In code, `unknown_ipa`, `ignored_ipa_marks` and
+  `ipa_lyric_report` (the crate), `sung_symbols` and `sung_marks` for what can be written. Sing mode
+  does not show these yet.
 
 ### A language without a front end
 
@@ -121,10 +125,11 @@ eSpeak NG is GPL-3.0 and large, so it is not bundled, not a dependency and not i
 runs the `espeak-ng` on your PATH (or `--espeak <path>`), and says how to get one when it is missing.
 It cleans what eSpeak writes: language-switch annotations, joiners and tie bars go; symbols the engine
 can't sing become the nearest it can through one table (`ʏ` → `y`, `ɔʏ` → `ɔɪ`, `ɐ̯` → `ɐ`, ...), a
-mark the engine doesn't model is dropped from its letter, and every change is printed on stderr. No
-sung symbol is ever stripped (`ç` stays `ç`). The engine's list of sounds is read from the wasm build
-(`bun run wasm`), so the table cannot drift: its test fails when the engine gains a sound an entry
-replaces.
+mark the engine doesn't read on its letter is dropped from it (a ring; a nasal vowel keeps its
+tilde, `ʲ ʱ ʰ` stay), and every change is printed on stderr. No sung symbol is ever stripped (`ç`
+stays `ç`). The engine's list of sounds and of marks (with the sounds each applies to) is read from
+the wasm build (`bun run wasm`), so the table cannot drift: its test fails when the engine gains a
+sound or mark an entry replaces.
 
 **Not tested with a real eSpeak NG:** the cleaner follows eSpeak's documented `--ipa` output and its
 tests use hand-written examples of that format. Check the first lines you make, and what the stderr
@@ -144,14 +149,19 @@ A sung syllable per sounding note:
   `"aspirated": true|false` (unsaid: English's rule; `ʰ` and `˭` in IPA text) and `"vot"`, how long
   its aspiration lasts in seconds (unsaid: 50 ms). Any consonant may say its sung `"dur"` (s;
   unsaid: its spoken length × 1.25): that's how a language holds its nasal codas or keeps an
-  affricate's frication short.
+  affricate's frication short. Any of them may carry the sound marks of IPA text: a consonant
+  `"palatalized": true` (`ʲ`) and a voiced stop or affricate `"breathy": true` (`ʱ`).
 - `nucleus`: one vowel, or a diphthong the planner knows. A note sings it as an on-glide, a held
   vowel and an off-glide. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold their first vowel and glide off in
   the last 35% of the note. Rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing a short glide on the
   beat, a quarter of the vowel and at most 120 ms, then hold the second vowel. Triphthongs (iaʊ
   iəʊ uaɪ ueɪ) do both. Use them for medial glides rather than putting the glide in the onset,
   where it's squeezed before the beat with the consonants. The apical vowels ɿ (四) and ʅ (是) are
-  calibrated vowels too.
+  calibrated vowels too. A vowel may say `"nasalized": true` (a combining tilde: the velum lowers for
+  the whole vowel, glides included) and `"breathy": true` (a diaeresis below: the folds part-open).
+- **Sound marks** (`nasalized`, `palatalized`, `breathy`, with `aspirated`): the planner turns each
+  into gestures on the velum, the tongue body or the glottis, and a mark on a sound it doesn't apply
+  to does nothing. What each does is in [architecture.md](architecture.md), section 4.
 - `pitch`: bends that colour the note's start or end, `st` semitones from the note, over `len` of the
   vowel and at most `max` seconds. The melody stays as written. A start bend begins in the onset,
   so a rising tone starts low rather than starting at the note and dipping.
