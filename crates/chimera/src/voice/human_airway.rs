@@ -264,12 +264,14 @@ impl HumanAirway {
         // the pharynx/oral split forward: issue #50, a 5.3 cm oral tube) made sections shorter than
         // one time step allows: Courant number 1.24, a self-oscillating airway that squealed at the
         // limiter with the voice off. Such a tube is stretched instead; poses in range are unchanged.
-        let ph_len = js_max(ph_len, self.n_ph as f64 * self.dx_stable);
-        let or_len = js_max(or_len, self.n_or as f64 * self.dx_stable);
+        // Only the network gets the stretch: ph_len/or_len stay anatomical, since the noise sources
+        // (against the teeth) and the UI's overlays map sections to places in the head with them.
         self.ph_len = ph_len;
         self.or_len = or_len;
-        self.net.set_tube_targets(self.pharynx, &self.ph_areas, Some(ph_len), Some(&self.ph_min));
-        self.net.set_tube_targets(self.oral, &self.or_areas, Some(or_len), Some(&self.or_min));
+        let ph_sim = js_max(ph_len, self.n_ph as f64 * self.dx_stable);
+        let or_sim = js_max(or_len, self.n_or as f64 * self.dx_stable);
+        self.net.set_tube_targets(self.pharynx, &self.ph_areas, Some(ph_sim), Some(&self.ph_min));
+        self.net.set_tube_targets(self.oral, &self.or_areas, Some(or_sim), Some(&self.or_min));
         self.net.set_port_target(self.velum_port, f.velum_port);
         self.update_noise(&f);
         self.frame = Some(f);
