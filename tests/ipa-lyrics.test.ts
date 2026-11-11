@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { initEngine } from "./harness.ts";
 
 await initEngine();
-const { lyricsToSyllables, ipaSymbols } = await import("../src/wasm/engine.ts");
+const { lyricsToSyllables, ipaSymbols, ipaMarks } = await import("../src/wasm/engine.ts");
 
 test("an IPA word is split into syllables without the English onset table, beside other scripts", () => {
   const s = lyricsToSyllables("さくら /ˈʃtʁaːsə/ hello 빵야");
@@ -22,6 +22,27 @@ test("aspiration is written: unmarked voiceless stops are unaspirated, ʰ aspira
   const [pa, pha] = lyricsToSyllables("/pa/ /pʰa/");
   expect(pa!.onset[0]!.aspirated).toBe(false);
   expect(pha!.onset[0]!.aspirated).toBe(true);
+});
+
+test("sound marks are sung: a tilde nasalizes a vowel, ʲ palatalizes, ʱ and a diaeresis below make it breathy", () => {
+  const [bon, , tja, bha, eh] = lyricsToSyllables("/bɔ̃ʒuʁ/ /tʲa/ /bʱa/ /ɛ̤/");
+  expect(bon!.nucleus.nasalized).toBe(true);
+  expect(bon!.text).toBe("bɔ̃");
+  expect(tja!.onset[0]!.palatalized).toBe(true);
+  expect(bha!.onset[0]!.breathy).toBe(true);
+  expect(eh!.nucleus.breathy).toBe(true);
+  // a plain syllable carries none of them
+  const [ma] = lyricsToSyllables("/ma/");
+  expect(ma!.nucleus.nasalized ?? ma!.onset[0]!.palatalized ?? ma!.onset[0]!.breathy).toBeUndefined();
+});
+
+test("the marks the engine reads are listed with the symbols they apply to", () => {
+  const marks = new Map(ipaMarks().map((m) => [m.mark, new Set(m.on)]));
+  expect([...marks.keys()].sort()).toEqual(["ʰ", "ʱ", "ʲ", "˭", "̃", "̤"].sort());
+  expect(marks.get("̃")!.has("ɔ")).toBe(true);
+  expect(marks.get("̃")!.has("b")).toBe(false);
+  expect(marks.get("ʱ")!.has("b")).toBe(true);
+  expect(marks.get("ʱ")!.has("p")).toBe(false);
 });
 
 test("a break mark and phrase punctuation work around IPA words", () => {

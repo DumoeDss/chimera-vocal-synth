@@ -8,17 +8,30 @@
  * zero-width joiner or a tie bar between the parts of a phoneme. When a word is spoken by another
  * voice, the output is annotated with the language, `(en)thanks(de)`.
  *
- * What the engine can sing comes from the engine (`ipaSymbols()`, the symbols the planner has a
- * sound for), passed in as `engine`: nothing here lists the engine's sounds, so a sound the
- * engine gains is kept as it is and the table below can't rot (tests/text-to-ipa.test.ts fails
- * when an entry's source became a sung symbol or its target is not one).
+ * What the engine can sing comes from the engine, passed in as `engine`: the symbols the planner
+ * has a sound for (`ipaSymbols()`) and the marks it reads on them, with the symbols each applies
+ * to (`ipaMarks()`: ʰ ˭ ʲ ʱ, the tilde of a nasal vowel, the diaeresis below of a breathy one).
+ * Nothing here lists the engine's sounds or marks, so a sound or mark the engine gains is kept as
+ * it is and the table below can't rot (tests/text-to-ipa.test.ts fails when an entry's source
+ * became a sung symbol or a readable mark, or its target is not one).
  */
 
 /** Combining marks (the tilde of ɔ̃, the ring of n̥, the non-syllabic arch of ɪ̯). */
 const COMBINING = /[̀-ͯ]/;
 
-/** Marks the engine reads that are not sounds: stress, length, aspiration. */
-export const MODIFIERS: ReadonlySet<string> = new Set(["ˈ", "ˌ", "ː", "ʰ", "˭"]);
+/** Marks that belong to no one sound: stress and length. The marks that change a sound come from the engine. */
+export const MODIFIERS: ReadonlySet<string> = new Set(["ˈ", "ˌ", "ː"]);
+
+/** What the engine sings: its symbols, and each mark it reads with the symbols it applies to. */
+export interface Engine {
+  symbols: ReadonlySet<string>;
+  marks: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+/** An `Engine` from `ipaSymbols()` and `ipaMarks()`. */
+export function engineOf(symbols: readonly string[], marks: readonly { mark: string; on: readonly string[] }[]): Engine {
+  return { symbols: new Set(symbols), marks: new Map(marks.map((m) => [m.mark, new Set(m.on)])) };
+}
 
 export interface Mapping {
   /** what eSpeak (or another G2P) writes */
@@ -32,9 +45,9 @@ export interface Mapping {
 
 /**
  * THE table: symbols the engine does not sing, and the nearest it does. Keys are matched longest
- * first. A combining mark that is not here is dropped from its letter and reported (nasal vowels
- * ɔ̃ are sung as ɔ), so a nasal needs no entry. A symbol that is neither here nor sung is dropped
- * and reported. Choose by ear and say why: these are nearest-sound guesses, not phonology.
+ * first. A combining mark the engine does not read on its letter (a ring, the arch of ɪ̯, a tilde on
+ * a consonant) is dropped from the letter and reported; the marks it does read stay (the tilde of
+ * ɔ̃ is sung). A symbol that is neither here nor sung is dropped and reported. Choose by ear and say why: these are nearest-sound guesses, not phonology.
  */
 export const MAPPINGS: readonly Mapping[] = [
   // German (eSpeak de)
@@ -109,23 +122,32 @@ function longest(s: string, i: number, max: number, has: (x: string) => boolean)
 
 /**
  * One IPA word → the IPA the engine sings, with what changed. A symbol the engine sings stays as
- * it is, so is a stress, length or aspiration mark. A symbol in MAPPINGS becomes its entry. A
- * letter with a combining mark the engine does not model loses the mark (a nasal vowel is sung
- * oral), a precomposed letter (ã) is read as its base and the mark, and anything else is dropped.
- * Diacritics are never stripped from a symbol the engine sings: ç stays ç.
+ * it is, so is a stress or length mark, and so is a mark the engine reads on that symbol (a tilde
+ * on a vowel, ʲ on a consonant, ʰ ˭ ʱ). A symbol in MAPPINGS becomes its entry. A mark the engine
+ * does not read on its letter is dropped and reported, a precomposed letter (ã) is read as its
+ * base and the mark, and anything else is dropped. Diacritics are never stripped from a symbol the
+ * engine sings: ç stays ç.
  */
-export function cleanWord(word: string, engine: ReadonlySet<string>): { ipa: string; changes: Change[] } {
+export function cleanWord(word: string, engine: Engine): { ipa: string; changes: Change[] } {
   const w = bareWord(word);
   const changes: Change[] = [];
   let out = "";
   let i = 0;
   const note = (from: string, to: string, why: string) => changes.push({ from, to, why });
-  // a letter's combining marks, which the engine does not model
+  // a letter's combining marks
   const marks = (j: number): string => {
     let m = "";
     while (j + m.length < w.length && COMBINING.test(w[j + m.length])) m += w[j + m.length];
     return m;
   };
+  // the marks the engine reads on `sym` stay; the rest are dropped and reported
+  const withMarks = (sym: string, given: string, shown: string) => {
+    const kept = [...given].filter((c) => engine.marks.get(c)?.has(sym));
+    if (kept.length < given.length) note(shown, sym + kept.join(""), "mark not modelled by the engine on this sound; the letter is sung without it");
+    return sym + kept.join("");
+  };
+  // the sound a mark written now would belong to (stress and length do not change it)
+  let last = "";
   while (i < w.length) {
     const key = longest(w, i, 3, (x) => MAP_ORDER.some((m) => m.from === x));
     if (key) {
@@ -135,11 +157,11 @@ export function cleanWord(word: string, engine: ReadonlySet<string>): { ipa: str
       i += key.length;
       continue;
     }
-    const sym = longest(w, i, 2, (x) => engine.has(x));
+    const sym = longest(w, i, 2, (x) => engine.symbols.has(x));
     if (sym) {
       const m = marks(i + sym.length);
-      if (m) note(sym + m, sym, "mark not modelled by the engine; the letter is sung without it");
-      out += sym;
+      out += m ? withMarks(sym, m, sym + m) : sym;
+      last = sym;
       i += sym.length + m.length;
       continue;
     }
@@ -151,15 +173,23 @@ export function cleanWord(word: string, engine: ReadonlySet<string>): { ipa: str
     }
     if (c === ".") {
       out += c; // a syllable break the writer chose
+      last = "";
       i++;
       continue;
     }
-    // a precomposed letter (ã): its base is the sound, the mark is not modelled
+    // a mark written after its sound (ʰ ˭ ʲ ʱ, or a combining mark after the length mark)
+    if (engine.marks.has(c)) {
+      if (engine.marks.get(c)!.has(last)) out += c;
+      else note(c, "", last ? "the engine reads this mark only on other sounds; the letter is sung without it" : "a mark on nothing the engine sings");
+      i++;
+      continue;
+    }
+    // a precomposed letter (ã): its base is the sound, its mark is the engine's to read or not
     const d = c.normalize("NFD");
-    if (d.length > 1 && engine.has(d[0]) && COMBINING.test(d[1])) {
+    if (d.length > 1 && engine.symbols.has(d[0]) && COMBINING.test(d[1])) {
       const m = marks(i + 1);
-      note(c + m, d[0], "mark not modelled by the engine; the letter is sung without it");
-      out += d[0];
+      out += withMarks(d[0], d.slice(1) + m, c + m);
+      last = d[0];
       i += 1 + m.length;
       continue;
     }
@@ -178,7 +208,7 @@ export interface Report {
   words: string[];
 }
 
-export function cleanWords(words: readonly string[], engine: ReadonlySet<string>): { words: string[]; report: Report[] } {
+export function cleanWords(words: readonly string[], engine: Engine): { words: string[]; report: Report[] } {
   const report: Report[] = [];
   const out: string[] = [];
   for (const w of words) {

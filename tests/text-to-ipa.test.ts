@@ -7,11 +7,11 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { initEngine } from "./harness.ts";
-import { MAPPINGS, MODIFIERS, bareWord, cleanWord, cleanWords, splitEspeak, toLyric } from "../tools/lib/text-to-ipa.ts";
+import { MAPPINGS, MODIFIERS, bareWord, cleanWord, cleanWords, engineOf, splitEspeak, toLyric } from "../tools/lib/text-to-ipa.ts";
 
 await initEngine();
-const { ipaSymbols, lyricsToSyllables } = await import("../src/wasm/engine.ts");
-const engine = new Set(ipaSymbols());
+const { ipaSymbols, ipaMarks, lyricsToSyllables } = await import("../src/wasm/engine.ts");
+const engine = engineOf(ipaSymbols(), ipaMarks());
 const clean = (w: string) => cleanWord(w, engine);
 
 const TOOL = fileURLToPath(new URL("../tools/text-to-ipa.ts", import.meta.url));
@@ -59,7 +59,7 @@ test("ç stays ç: German ich keeps its fricative, and no sung symbol is ever st
   expect(r.changes).toEqual([]);
   expect(clean("ˈiːç").ipa).toBe("ˈiːç");
   // every sung symbol that decomposes (ç) survives alone
-  for (const s of engine) if (s.normalize("NFD") !== s) expect(clean(s).ipa).toBe(s);
+  for (const s of engine.symbols) if (s.normalize("NFD") !== s) expect(clean(s).ipa).toBe(s);
 });
 
 test("symbols the engine lacks become the nearest it has, and are reported", () => {
@@ -72,13 +72,52 @@ test("symbols the engine lacks become the nearest it has, and are reported", () 
   expect(clean("bˈɪ̯a").ipa).toBe("bˈja");
 });
 
-test("a mark the engine does not model is dropped from its letter and reported; the letter stays", () => {
+test("a nasal vowel keeps its tilde: the engine sings it, so nothing is reported", () => {
   const r = clean("bɔ̃ʒˈuʁ");
-  expect(r.ipa).toBe("bɔʒˈuʁ");
-  expect(r.changes.map((c) => [c.from, c.to])).toEqual([["ɔ̃", "ɔ"]]);
-  // a precomposed nasal vowel is read as its letter and the mark
-  expect(clean("lã").ipa).toBe("la");
-  expect(clean("lã").changes.map((c) => [c.from, c.to])).toEqual([["ã", "a"]]);
+  expect(r.ipa).toBe("bɔ̃ʒˈuʁ");
+  expect(r.changes).toEqual([]);
+  // a precomposed nasal vowel is read as its letter and the mark, which stays
+  expect(clean("lã").ipa).toBe("la\u0303");
+  expect(clean("lã").changes).toEqual([]);
+});
+
+test("a mark the engine does not read is dropped from its letter and reported; the letter stays", () => {
+  // a devoicing ring, and a tilde on a consonant (the engine reads the tilde on vowels only)
+  const r = clean("ˈn̥a");
+  expect(r.ipa).toBe("ˈna");
+  expect(r.changes.map((c) => [c.from, c.to])).toEqual([["n̥", "n"]]);
+  expect(clean("m\u0303a").changes.map((c) => [c.from, c.to])).toEqual([["m\u0303", "m"]]);
+  expect(clean("m\u0303a").ipa).toBe("ma");
+});
+
+test("the marks the engine reads stay on the sounds it reads them on: ʲ ʱ ʰ, the tilde, the diaeresis below", () => {
+  for (const w of ["tʲat", "bʱa", "pʰa", "ɛ\u0324", "ã","aː\u0303"]) {
+    expect(clean(w).ipa, w).toBe(w);
+    expect(clean(w).changes, w).toEqual([]);
+  }
+  // on a sound the engine does not read it on, the mark is dropped and said
+  const r = clean("aʲ");
+  expect(r.ipa).toBe("a");
+  expect(r.changes.map((c) => [c.from, c.to])).toEqual([["ʲ", ""]]);
+  expect(clean("pʱa").ipa).toBe("pa");
+  // a mark on nothing
+  expect(clean("ʲa").ipa).toBe("a");
+});
+
+test("every mark the engine lists is kept on each symbol it applies to and dropped from every other", () => {
+  expect(engine.marks.size).toBeGreaterThanOrEqual(6);
+  for (const [mark, on] of engine.marks) {
+    expect(on.size, `${mark} applies to nothing`).toBeGreaterThan(0);
+    for (const sym of engine.symbols) {
+      const r = clean(sym + mark);
+      if (on.has(sym)) {
+        expect(r, `${sym}${mark}`).toEqual({ ipa: sym + mark, changes: [] });
+      } else {
+        expect(r.ipa, `${sym}${mark}`).toBe(sym);
+        expect(r.changes.length, `${sym}${mark}`).toBe(1);
+      }
+    }
+  }
 });
 
 test("a symbol with no sound and no entry is dropped, and said", () => {
@@ -112,7 +151,7 @@ test("every table entry still names a symbol the engine lacks and a replacement 
   const sung = (s: string) => {
     let i = 0;
     while (i < s.length) {
-      const n = [2, 1].find((k) => engine.has(s.slice(i, i + k)) || (k === 1 && MODIFIERS.has(s[i])));
+      const n = [2, 1].find((k) => engine.symbols.has(s.slice(i, i + k)) || (k === 1 && (MODIFIERS.has(s[i]) || engine.marks.has(s[i]))));
       if (!n) return false;
       i += n;
     }
@@ -120,17 +159,30 @@ test("every table entry still names a symbol the engine lacks and a replacement 
   };
   for (const m of MAPPINGS) {
     expect(sung(m.to), `${m.from} → ${m.to}: the target is not sung`).toBe(true);
-    if (!m.exact) expect(engine.has(m.from), `${m.from} is sung now: delete its entry`).toBe(false);
+    if (!m.exact) expect(engine.symbols.has(m.from), `${m.from} is sung now: delete its entry`).toBe(false);
+  }
+});
+
+test("no table entry maps away a mark the engine reads, and no sound mark is left to MODIFIERS", () => {
+  for (const [mark, on] of engine.marks) {
+    expect(MODIFIERS.has(mark), `${mark} is the engine's now: take it out of MODIFIERS`).toBe(false);
+    for (const m of MAPPINGS) {
+      if (m.exact || !m.from.includes(mark)) continue;
+      const base = [...on].find((sym) => m.from.includes(sym + mark));
+      expect(base, `${m.from}: the engine reads ${mark} on ${base} now: delete the entry`).toBeUndefined();
+    }
   }
 });
 
 // ------------------------------------------------------------------ the tool
 test("--ipa cleans IPA from an argument, prints the lyric line, and reports what it changed on stderr", () => {
-  const r = run(["--ipa", "ˈʃøːn", "fˈʏʁ", "bɔ̃ʒˈuʁ"]);
+  const r = run(["--ipa", "ˈʃøːn", "fˈʏʁ", "bɔ̃ʒˈuʁ", "n̥a"]);
   expect(r.code).toBe(0);
-  expect(r.out.trim()).toBe("/ˈʃøːn/ /fˈyʁ/ /bɔʒˈuʁ/");
+  expect(r.out.trim()).toBe("/ˈʃøːn/ /fˈyʁ/ /bɔ̃ʒˈuʁ/ /na/");
   expect(r.err).toContain("ʏ → y");
-  expect(r.err).toContain("ɔ̃ → ɔ");
+  expect(r.err).toContain("n̥ → n");
+  // the nasal vowel is sung, so it is not reported
+  expect(r.err).not.toContain("ɔ̃");
 });
 
 test("--ipa reads stdin and --json prints the syllables array a melody file takes", () => {

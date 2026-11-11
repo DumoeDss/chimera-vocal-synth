@@ -17,7 +17,8 @@
  *
  * Cleaning (tools/lib/text-to-ipa.ts): the language-switch annotations eSpeak writes, joiners and
  * tie bars go; stress and length stay; a symbol the engine cannot sing becomes the nearest one it
- * can through one table, a mark it does not model is dropped from its letter, and every such change
+ * can through one table, a mark it does not read on its letter is dropped (the tilde of a nasal
+ * vowel, ʲ, ʱ and the like stay: the engine sings them), and every such change
  * is printed on stderr, so you can see what the engine will sing. A word with no vowel is reported
  * too (the engine does not sing it).
  *
@@ -25,7 +26,7 @@
  * output, and its tests use hand-written examples of that format. Check the first lines you make.
  */
 import { readFileSync, existsSync } from "node:fs";
-import { cleanWords, formatReport, splitEspeak, toLyric } from "./lib/text-to-ipa.ts";
+import { cleanWords, engineOf, formatReport, splitEspeak, toLyric } from "./lib/text-to-ipa.ts";
 
 const USAGE = `usage: bun tools/text-to-ipa.ts [--voice <espeak voice>] [--json] [--espeak <path>] "text"
        bun tools/text-to-ipa.ts --ipa [--json] ["ipa words"]   (reads stdin without an argument)
@@ -83,9 +84,9 @@ if (!existsSync(wasm)) fail("text-to-ipa: the engine is not built (src/wasm/chim
 const { initChimera } = await import("../src/wasm/chimera.ts");
 await initChimera(readFileSync(wasm));
 // engine.ts calls the wasm when it loads, so it is imported only after initChimera
-const { ipaSymbols, lyricsToSyllables } = await import("../src/wasm/engine.ts");
+const { ipaSymbols, ipaMarks, lyricsToSyllables } = await import("../src/wasm/engine.ts");
 
-const { words, report } = cleanWords(spoken, new Set(ipaSymbols()));
+const { words, report } = cleanWords(spoken, engineOf(ipaSymbols(), ipaMarks()));
 for (const line of formatReport(report)) console.error(`text-to-ipa: ${line}`);
 const mute = words.filter((w) => lyricsToSyllables(toLyric([w])).length === 0);
 if (mute.length) console.error(`text-to-ipa: no vowel the engine sings in: ${mute.join(" ")} (not sung)`);
