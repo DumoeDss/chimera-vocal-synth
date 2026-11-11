@@ -91,7 +91,7 @@ fn a_nasalized_diphthong_keeps_the_velum_down_through_its_glide() {
 }
 
 fn syl(onset: Vec<Segment>, nucleus: Segment) -> Syllable {
-    Syllable { text: "x".into(), onset, nucleus, coda: vec![], melisma: None, word_end: true, phrase_end: false }
+    Syllable { text: "x".into(), onset, nucleus, coda: vec![], melisma: None, word_end: true, phrase_end: false, ..Default::default() }
 }
 
 #[test]

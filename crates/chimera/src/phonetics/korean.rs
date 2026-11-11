@@ -259,6 +259,7 @@ pub fn word_syllables(word: &str) -> Vec<Syllable> {
             melisma: None,
             word_end: i + 1 == blocks.len(),
             phrase_end: false,
+            ..Default::default()
         });
     }
     out
