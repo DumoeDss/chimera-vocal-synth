@@ -31,7 +31,13 @@ fn cdur(ipa: &str, body: BodyMix, k: f64) -> f64 {
 /// nasal codas); otherwise the phoneme's spoken length times `k`. Either is squeezed when a note is
 /// too short for it.
 fn consonants(segs: &[Segment], body: BodyMix, k: f64) -> Vec<Segment> {
-    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(c.dur.unwrap_or_else(|| cdur(&c.ipa, body, k))), aspirated: c.aspirated, vot: c.vot, ..Default::default() }).collect()
+    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(c.dur.unwrap_or_else(|| cdur(&c.ipa, body, k))), aspirated: c.aspirated, vot: c.vot, palatalized: c.palatalized, breathy: c.breathy, ..Default::default() }).collect()
+}
+
+/// A sung vowel (or one part of a diphthong or triphthong) at the note's pitch, with the sound
+/// marks of the syllable's nucleus.
+fn nucleus_part(ipa: &str, dur: f64, hz: f64, nucleus: &Segment) -> Segment {
+    Segment { ipa: ipa.to_string(), dur: Some(dur), f0: Some(hz), stress: Some(1), nasalized: nucleus.nasalized, breathy: nucleus.breathy, ..Default::default() }
 }
 
 /// Sung consonants at their note's pitch: an onset consonant moves the pitch to the new note
@@ -205,15 +211,15 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let on = onglide(nuc).filter(|_| !melisma(&n.syl));
             let g = if on.is_some() { js_min(0.25 * vdur, RISING_GLIDE) } else { 0.0 };
             if let Some(a) = on {
-                segs.push(Segment { ipa: a.to_string(), dur: Some(g), f0: Some(hz), stress: Some(1), ..Default::default() });
+                segs.push(nucleus_part(a, g, hz, &n.syl.nucleus));
             }
             let rest = vdur - g;
             match offglide(nuc).filter(|_| !next_melisma) {
                 Some(b) => {
-                    segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest * (1.0 - OFFGLIDE)), f0: Some(hz), stress: Some(1), ..Default::default() });
-                    segs.push(Segment { ipa: b.to_string(), dur: Some(rest * OFFGLIDE), f0: Some(hz), stress: Some(1), ..Default::default() });
+                    segs.push(nucleus_part(held_vowel(nuc), rest * (1.0 - OFFGLIDE), hz, &n.syl.nucleus));
+                    segs.push(nucleus_part(b, rest * OFFGLIDE, hz, &n.syl.nucleus));
                 }
-                None => segs.push(Segment { ipa: held_vowel(nuc).to_string(), dur: Some(rest), f0: Some(hz), stress: Some(1), ..Default::default() }),
+                None => segs.push(nucleus_part(held_vowel(nuc), rest, hz, &n.syl.nucleus)),
             }
             if coda.first().is_some_and(|c| matches!(c.ipa.as_str(), "m" | "n" | "ŋ")) {
                 // the syllable whose coda this is decides (a melisma's coda is its parent's)
@@ -317,9 +323,9 @@ pub fn plan_note_on(syl: &Syllable, midi: f64, o: &NoteOnOptions) -> Vec<Gesture
     }
     segs.extend(consonants(&syl.onset, o.body, 0.7));
     if let Some(a) = onglide(&syl.nucleus.ipa) {
-        segs.push(Segment { ipa: a.to_string(), dur: Some(RISING_GLIDE * 0.6), f0: Some(hz), stress: Some(1), ..Default::default() });
+        segs.push(nucleus_part(a, RISING_GLIDE * 0.6, hz, &syl.nucleus));
     }
-    segs.push(Segment { ipa: held_vowel(&syl.nucleus.ipa).to_string(), dur: Some(HOLD), f0: Some(hz), stress: Some(1), ..Default::default() });
+    segs.push(nucleus_part(held_vowel(&syl.nucleus.ipa), HOLD, hz, &syl.nucleus));
     let plan = plan_utterance(&segs, &PlanOptions { body: o.body, t0: LIVE_T0, f0: Some(hz), intonation: Some(Intonation::Flat), open_end: Some(true), ..Default::default() });
     let vowel = &plan.segments[plan.segments.len() - 1];
     let mut out: Vec<Gesture> = plan.gestures.iter().map(|g| g.tag(if g.targets.has(ControlKey::F0) { o.tag + 1.0 } else { o.tag })).collect();
@@ -358,7 +364,7 @@ fn tail(syl: &Syllable, body: BodyMix, hz: f64) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
     // a falling diphthong (or a triphthong) glides off at the end; a rising one already holds its vowel
     if let Some(b) = offglide(&syl.nucleus.ipa) {
-        out.push(Segment { ipa: b.to_string(), dur: Some(0.07), stress: Some(1), f0: Some(hz), ..Default::default() });
+        out.push(nucleus_part(b, 0.07, hz, &syl.nucleus));
     }
     out.extend(consonants(&syl.coda, body, 0.7));
     out

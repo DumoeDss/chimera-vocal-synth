@@ -1,6 +1,8 @@
-//! IPA string → segments (stress ˈ ˌ, length ː, tie bars, affricates, diphthongs, word gaps).
+//! IPA string → segments (stress ˈ ˌ, length ː, tie bars, affricates, diphthongs, word gaps, and the
+//! marks that change how a sound is made: ʰ ˭ aspiration, a tilde on a vowel, ʲ, ʱ, a diaeresis below).
 
 use super::Segment;
+use super::inventory::{Manner, PhonemeDef, Voicing};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -9,6 +11,12 @@ const VOWEL_CHARS: &str = "iyɨʉɯuɪʏʊeøɘɵɤoəɛœɜɞʌɔæɐaɶɑɒɝ�
 const MULTI: [&str; 14] = ["tʃ", "dʒ", "ts", "dz", "pf", "tɕ", "dʑ", "tʂ", "dʐ", "aɪ", "aʊ", "ɔɪ", "eɪ", "oʊ"];
 const ALIASES: [(&str, &str); 9] = [("t͡ʃ", "tʃ"), ("d͡ʒ", "dʒ"), ("t͡s", "ts"), ("d͡z", "dz"), ("ɡ", "g"), ("ʧ", "tʃ"), ("ʤ", "dʒ"), ("r̥", "r"), ("ɐ̯", "ɐ")];
 
+/// combining tilde and combining diaeresis below: the vowel before them is nasalized, breathy
+const NASALIZED: char = '\u{303}';
+const BREATHY: char = '\u{324}';
+/// NFC composes these vowels with their mark into one code point; the tokenizer reads them as the
+/// vowel and the mark (those that don't compose, like ɛ̃, arrive as two)
+const PRECOMPOSED: [(&str, &str); 7] = [("ã", "a\u{303}"), ("õ", "o\u{303}"), ("ẽ", "e\u{303}"), ("ĩ", "i\u{303}"), ("ũ", "u\u{303}"), ("ỹ", "y\u{303}"), ("ṳ", "u\u{324}")];
 
 fn known() -> &'static HashSet<&'static str> {
     static K: OnceLock<HashSet<&'static str>> = OnceLock::new();
@@ -50,8 +58,22 @@ struct Gaps {
     marked: Vec<String>,
 }
 
+impl Gaps {
+    /// A mark the tokenizer reads, written after a sound it does not apply to (ʲ after a vowel,
+    /// ʱ after a voiceless stop): reported with that sound, or alone when nothing precedes it.
+    fn ignore(&mut self, after: Option<&Segment>, mark: char) {
+        let (list, shown) = match after {
+            Some(s) => (&mut self.marked, format!("{}{mark}", s.ipa)),
+            None => (&mut self.unknown, mark.to_string()),
+        };
+        if !list.contains(&shown) {
+            list.push(shown);
+        }
+    }
+}
+
 /// The symbols in `input` that `tokenize_ipa` silently drops because the engine does not know them
-/// (a typo, a capital, a precomposed nasal vowel such as ã, a click), in order, each once. The
+/// (a typo, a capital, a click), in order, each once. The
 /// tokenizer and the planner treat a symbol outside the inventory as nothing, so a word written
 /// with one sings as another sound; callers that take IPA from a person should show this list.
 pub fn unknown_ipa(input: &str) -> Vec<String> {
@@ -61,8 +83,10 @@ pub fn unknown_ipa(input: &str) -> Vec<String> {
 }
 
 /// The letters in `input` that carry a combining mark the tokenizer skips without modelling it
-/// (the tilde of a nasal vowel `ɔ̃`, the ring of a devoiced `n̥`, the syllabic and non-syllabic
-/// marks), shown with their mark, in order, each once. The letter is sung; the mark is not.
+/// (the ring of a devoiced `n̥`, the tilde of a nasal consonant, the syllabic and non-syllabic
+/// marks), shown with their mark, in order, each once, and the marks it reads (ʲ ʱ, a tilde or
+/// diaeresis below) written after a sound they do not apply to. The letter is sung; the mark is not.
+/// The tilde of a nasal vowel, ʲ, ʱ and the diaeresis below of a vowel are read, not reported.
 pub fn ignored_ipa_marks(input: &str) -> Vec<String> {
     let mut g = Gaps::default();
     tokenize(input, &mut g);
@@ -72,6 +96,9 @@ pub fn ignored_ipa_marks(input: &str) -> Vec<String> {
 fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
     let mut s = nfc(input);
     for (a, b) in ALIASES {
+        s = s.replace(a, b);
+    }
+    for (a, b) in PRECOMPOSED {
         s = s.replace(a, b);
     }
     s = s.replace(['\u{35C}', '\u{361}'], ""); // tie bars
@@ -110,6 +137,34 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             i += 1;
             continue;
         }
+        // palatalization, on a consonant made with a mouth gesture (not a glottal one)
+        if ch == 'ʲ' {
+            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.manner != Manner::Glottal)) {
+                Some(last) => last.palatalized = Some(true),
+                None => gaps.ignore(out.last(), ch),
+            }
+            i += 1;
+            continue;
+        }
+        // a breathy-voiced release, on a voiced stop or affricate (Hindi bʱ dʱ gʱ)
+        if ch == 'ʱ' {
+            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.voicing == Voicing::Voiced && matches!(c.manner, Manner::Stop | Manner::Affricate))) {
+                Some(last) => last.breathy = Some(true),
+                None => gaps.ignore(out.last(), ch),
+            }
+            i += 1;
+            continue;
+        }
+        // a vowel mark after the length mark instead of the vowel (ɛː̃)
+        if (ch == NASALIZED || ch == BREATHY) && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
+            match out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
+                Some(last) if ch == NASALIZED => last.nasalized = Some(true),
+                Some(last) => last.breathy = Some(true),
+                None => gaps.ignore(out.last(), ch),
+            }
+            i += 1;
+            continue;
+        }
         if ch == 'ː' || ch == ':' {
             if let Some(last) = out.last_mut() {
                 let first = last.ipa.chars().next();
@@ -128,9 +183,13 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             tok = ch.to_string();
         }
         i += tok.chars().count();
-        // skip combining diacritics we do not model
+        // combining diacritics: the tilde and the diaeresis below on a vowel are read, the rest we
+        // do not model
         let marks_from = i;
+        let (mut nasalized, mut breathy) = (false, false);
         while i < s.len() && ('\u{300}'..='\u{36F}').contains(&s[i]) {
+            nasalized |= s[i] == NASALIZED;
+            breathy |= s[i] == BREATHY;
             i += 1;
         }
         if !known.contains(tok.as_str()) {
@@ -139,19 +198,31 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             }
             continue;
         }
+        let is_v = is_vowel_token(&tok);
         if i > marks_from {
-            let shown: String = tok.chars().chain(s[marks_from..i].iter().copied()).collect();
-            if !gaps.marked.contains(&shown) {
-                gaps.marked.push(shown);
+            // what is left unread: any mark but a tilde or diaeresis below on a vowel
+            let unread: String = s[marks_from..i].iter().copied().filter(|c| !(is_v && (*c == NASALIZED || *c == BREATHY))).collect();
+            if !unread.is_empty() {
+                let shown: String = tok.chars().chain(unread.chars()).collect();
+                if !gaps.marked.contains(&shown) {
+                    gaps.marked.push(shown);
+                }
             }
         }
-        let is_v = tok.chars().next().is_some_and(|c| VOWEL_CHARS.contains(c)) && !super::inventory::consonant_symbols().contains(&tok.as_str());
-        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), ..Default::default() });
+        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), nasalized: (is_v && nasalized).then_some(true), breathy: (is_v && breathy).then_some(true), ..Default::default() });
         if is_v {
             stress = 0;
         }
     }
     out
+}
+
+fn consonant(ipa: &str) -> Option<&'static PhonemeDef> {
+    super::inventory::consonants().iter().find(|c| c.ipa == ipa)
+}
+
+fn is_vowel_token(tok: &str) -> bool {
+    tok.chars().next().is_some_and(|c| VOWEL_CHARS.contains(c)) && !super::inventory::consonant_symbols().contains(&tok)
 }
 
 fn starts_with_at(s: &[char], i: usize, m: &str) -> bool {

@@ -159,6 +159,12 @@ export interface Segment {
   aspirated?: boolean;
   /** an aspirated stop or affricate's aspiration length (s); unset: 50 ms */
   vot?: number;
+  /** a vowel said with the velum lowered (IPA combining tilde) */
+  nasalized?: boolean;
+  /** a consonant with a secondary palatal gesture, the tongue body raised and fronted (IPA ʲ) */
+  palatalized?: boolean;
+  /** breathy voice: a voiced stop or affricate's release (IPA ʱ), or a vowel (combining diaeresis below) */
+  breathy?: boolean;
 }
 
 export interface PlannedSegment {
