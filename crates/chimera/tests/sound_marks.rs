@@ -110,6 +110,36 @@ fn a_sung_vowel_keeps_its_nasalization() {
     assert_eq!(labelled(&p.gestures, "velum").len(), 2);
 }
 
+#[test]
+fn every_part_of_a_sung_rising_or_falling_nucleus_keeps_the_vowel_marks() {
+    // #34 sings a nucleus as an on-glide, a held vowel and an off-glide: a rising diphthong (ia), a
+    // falling one (aɪ) and a triphthong (iaʊ). Each sounding vowel part must lie inside a velum
+    // gesture (nasalized) and a breathy one (breathy).
+    let opts = SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0, ..Default::default() };
+    for nuc in ["ia", "aɪ", "iaʊ", "uo"] {
+        for (flag, label) in [("nasalized", "velum"), ("breathy", "breathy")] {
+            let nucleus = Segment { nasalized: (flag == "nasalized").then_some(true), breathy: (flag == "breathy").then_some(true), ..Segment::new(nuc) };
+            let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl(vec![Segment::new("p")], nucleus.clone()) }], &opts);
+            let gs = labelled(&p.gestures, label);
+            let vowels: Vec<_> = p.segments.iter().filter(|s| s.kind == "vowel").collect();
+            assert!(vowels.len() >= 2, "{nuc}: {} vowel parts", vowels.len());
+            for v in &vowels {
+                assert!(gs.iter().any(|g| g.t0 <= v.t0 + 1e-9 && g.t1 >= v.t1 - 1e-9), "{nuc} {flag}: the part {} ({:.3}-{:.3}) is outside every {label} gesture", v.ipa, v.t0, v.t1);
+            }
+            // the same note with no flag has none
+            let plain = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl(vec![Segment::new("p")], Segment::new(nuc)) }], &opts);
+            assert!(labelled(&plain.gestures, label).is_empty(), "{nuc}");
+            // a live note: its onset glide and held vowel, then the off-glide when the key is released
+            let on = plan_note_on(&syl(vec![], nucleus.clone()), 57.0, &NoteOnOptions { body: "male".into(), vibrato: 0.0, tag: 1.0, legato_from: None });
+            assert!(!labelled(&on, label).is_empty(), "{nuc} {flag}: note on");
+            if matches!(nuc, "aɪ" | "iaʊ") {
+                let off = chimera::phonetics::sing::plan_note_off(&syl(vec![], nucleus), 57.0, BodyMix::MALE);
+                assert!(!labelled(&off, label).is_empty(), "{nuc} {flag}: note off");
+            }
+        }
+    }
+}
+
 fn palatalized(s: &Segment) -> Option<bool> {
     s.palatalized
 }
