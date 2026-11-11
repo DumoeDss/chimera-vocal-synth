@@ -6,6 +6,7 @@ CHIMERA sings in two halves, the usual split in speech synthesis:
 lyrics ──► router ──► FRONT END ──► syllables ──► BACK END ──► sound
            (by script)  English: CMUdict         (IPA + aspiration     the planner, the airway,
                         Korean: Hangul rules      + pitch bends)        the voice: language-agnostic
+                        Japanese: kana rules
                         Mandarin: pinyin lexicon
                         Pinyin: typed tones
                         explicit syllables pass through
@@ -22,6 +23,7 @@ one exception: it is still the planner's default when a front end says nothing.
 |---|---|---|---|
 | Latin | English | CMUdict (letter-to-sound until it loads) | `phonetics/english.rs`, `syllables.rs` |
 | Hangul | Korean | nothing: the block's letters are its sounds | `phonetics/korean.rs` |
+| Kana | Japanese | nothing: the kana are their sounds | `phonetics/japanese.rs` |
 | Han | Mandarin | `public/data/mandarin.txt.gz` (208 KB, loaded when lyrics have Han characters) | `phonetics/mandarin.rs` |
 | Latin with tones | Mandarin as pinyin | nothing (checked against Mandarin's 411 syllables) | `phonetics/mandarin.rs` (`Pinyin`) |
 
@@ -29,6 +31,9 @@ The router (`read_lyrics` in `syllables.rs`) sends each word to the front end wh
 in, so a line can mix them: `我爱你，银行 hello 빵야 wǒ ài nǐ`. It also handles what every language shares:
 melisma marks (`-`, `~`), phrase punctuation (ASCII and full-width `，。！？`) and word ends. Type
 lyrics in Sing mode, a melody file's `"lyrics"`, or a duet show's melody files.
+
+Japanese is typed in kana (hiragana, katakana, half-width katakana), one note per mora: `さくら`,
+`コーヒー`, `きょう`. It is its own section below; kanji are not read.
 
 Pinyin and English share the Latin alphabet, so a front end may decline a word it scanned. Pinyin
 claims only a word that carries tones and parses fully into real syllables:
@@ -46,6 +51,33 @@ The one ambiguity: an accented English word that is also valid toned pinyin (`r�
 reads as pinyin; type it unaccented.
 
 `chimera syllables "<lyrics>"` prints what the front ends wrote: the quickest way to check one.
+
+## Japanese
+
+`phonetics/japanese.rs`. Kana only: Han characters stay with the Mandarin front end (see below), so
+type kanji lyrics as kana. There is no kanji dictionary. One kana is one note, and the note's text
+is the kana as typed; a small ゃゅょ or small vowel joins the kana before it (`きゃ`, `ふぁ`).
+- **Sounds:** し ɕ, ち tɕ, つ ts, ふ ɸ, ひ ç, に ɲ, じ/ぢ dʑ, ず/づ z, ら行 ɾ, を o. Yōon: `きゃ` is
+  k j a, and しゃ ちゃ じゃ にゃ ひゃ carry their palatal (ɕa). Loanword kana: ふぁ ɸa, てぃ ti, うぃ wi,
+  ちぇ tɕe, ヴ v and the like.
+- **Aspiration:** a weak, short one (30 to 40 ms) on every voiceless stop and affricate, said
+  explicitly: Japanese has no aspirated/unaspirated contrast, and English's positional rule would
+  make the k of `きゃ` (k j a) differ from the k of `か`.
+- **ん** is the previous note's coda (the text shows both: `かん`), held a mora long and placed by
+  what follows: m before p b m, n before t d n ts z tɕ dʑ ɾ, ŋ before k g, ɴ at the end of a word and
+  before a vowel, glide or fricative. A ん that starts a word, or follows another ん, is its own note:
+  the nasal and ɯ.
+- **っ** holds the next consonant twice as long, through its sung `dur` (no second stop); its kana
+  joins the previous note's text. Before a vowel, ɾ or a glide, and at the end of a word, it is a
+  glottal stop coda. At the start of a word it is dropped.
+- **Long vowels** are melisma notes that continue the vowel, one per kana: ー, a vowel kana that
+  repeats the vowel before it in the word (`おかあさん`, `おおきい`), and the spellings おう → oo, えい → ee.
+  The rule can't tell a real う (the う of 思う sings as a continued o).
+- **は and へ** are read as written; type `わ` and `え` for the particle readings.
+- **No pitch accent and no vowel devoicing:** the notes carry the pitch, and a devoiced vowel would
+  be a silent note.
+- Iteration marks (ゝ ゞ) repeat the kana before them; ・ separates words.
+- **Not yet checked** with the scramble test or by a native speaker.
 
 ## The one format
 
@@ -98,7 +130,8 @@ end.
 4. **Run the scramble test** before believing it works.
 
 Han characters are shared by Mandarin, Cantonese and Japanese. With a second Han front end, a
-song-level language choice would pick between them; today Mandarin claims them.
+song-level language choice would pick between them; today Mandarin claims them, and Japanese is
+typed in kana.
 
 ## The scramble test
 
