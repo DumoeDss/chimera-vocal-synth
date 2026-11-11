@@ -171,7 +171,12 @@ struct Seg<'a> {
     vowel: Option<ArticPatch>,
     glide_from: bool,
     aspirated: Option<bool>,
+    nasalized: Option<bool>,
 }
+
+/// velum port area (cm²) of a nasalized vowel, and the ramps of its lowering and raising (s)
+const NASAL_VOWEL_PORT: f64 = 0.3;
+const NASAL_VOWEL_RAMP: f64 = 0.04;
 
 #[derive(Clone, Copy)]
 struct Span {
@@ -197,10 +202,10 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
             let base = durs[si];
             for (i, p) in parts.iter().enumerate() {
                 let dur = if parts.len() > 1 { base * (if i == 0 { 0.55 } else { 0.45 }) } else { base };
-                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None });
+                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, nasalized: s.nasalized });
             }
         } else {
-            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated });
+            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, nasalized: s.nasalized });
         }
     }
     for s in segs.iter_mut() {
@@ -259,6 +264,11 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
             stress: if s.vowel.is_some() { Some(s.stress.unwrap_or(0)) } else { None },
             kind: if s.vowel.is_some() { "vowel".to_string() } else { s.def.map_or("?", |d| d.manner.as_str()).to_string() },
         });
+        if s.vowel.is_some() && s.nasalized == Some(true) && !s.glide_from {
+            // a nasalized vowel: the velum is down for the whole vowel, through a diphthong's glide
+            let last = (i + 1..segs.len()).take_while(|&j| segs[j].glide_from).last().unwrap_or(i);
+            gestures.push(Gesture::new(t0, times[last].t1, NASAL_VOWEL_RAMP, NASAL_VOWEL_RAMP, 4.0, one(ArticKey::Velum, NASAL_VOWEL_PORT)).label("velum"));
+        }
         let Some(def) = s.def.as_ref() else { continue };
         let next_vowel = i < segs.len() - 1 && segs[i + 1].vowel.is_some();
         let prev_seg = if i > 0 { Some(&segs[i - 1]) } else { None };

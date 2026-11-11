@@ -157,6 +157,8 @@ export interface Segment {
   wordEnd?: boolean;
   /** a voiceless stop or affricate's aspiration as its front end decides it (unset: English's rule) */
   aspirated?: boolean;
+  /** a vowel said with the velum lowered (IPA combining tilde) */
+  nasalized?: boolean;
 }
 
 export interface PlannedSegment {

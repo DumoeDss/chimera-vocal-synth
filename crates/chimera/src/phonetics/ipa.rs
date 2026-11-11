@@ -9,6 +9,11 @@ const VOWEL_CHARS: &str = "iyɨʉɯuɪʏʊeøɘɵɤoəɛœɜɞʌɔæɐaɶɑɒɝ�
 const MULTI: [&str; 10] = ["tʃ", "dʒ", "ts", "dz", "pf", "aɪ", "aʊ", "ɔɪ", "eɪ", "oʊ"];
 const ALIASES: [(&str, &str); 9] = [("t͡ʃ", "tʃ"), ("d͡ʒ", "dʒ"), ("t͡s", "ts"), ("d͡z", "dz"), ("ɡ", "g"), ("ʧ", "tʃ"), ("ʤ", "dʒ"), ("r̥", "r"), ("ɐ̯", "ɐ")];
 
+/// combining tilde: the vowel before it is nasalized
+const NASALIZED: char = '\u{303}';
+/// NFC composes these vowels with their tilde into one code point; the tokenizer reads them as the
+/// vowel and the mark (those that don't compose, like ɛ̃, arrive as two)
+const PRECOMPOSED: [(&str, &str); 6] = [("ã", "a\u{303}"), ("õ", "o\u{303}"), ("ẽ", "e\u{303}"), ("ĩ", "i\u{303}"), ("ũ", "u\u{303}"), ("ỹ", "y\u{303}")];
 
 fn known() -> &'static HashSet<&'static str> {
     static K: OnceLock<HashSet<&'static str>> = OnceLock::new();
@@ -31,6 +36,9 @@ pub fn init() {
 pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
     let mut s = nfc(input);
     for (a, b) in ALIASES {
+        s = s.replace(a, b);
+    }
+    for (a, b) in PRECOMPOSED {
         s = s.replace(a, b);
     }
     s = s.replace(['\u{35C}', '\u{361}'], ""); // tie bars
@@ -69,6 +77,14 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             i += 1;
             continue;
         }
+        // a tilde after the length mark instead of the vowel (ɛː̃)
+        if ch == NASALIZED && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
+            if let Some(last) = out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
+                last.nasalized = Some(true);
+            }
+            i += 1;
+            continue;
+        }
         if ch == 'ː' || ch == ':' {
             if let Some(last) = out.last_mut() {
                 let first = last.ipa.chars().next();
@@ -87,20 +103,26 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             tok = ch.to_string();
         }
         i += tok.chars().count();
-        // skip combining diacritics we do not model
+        // combining diacritics: the tilde is read, the rest we do not model
+        let mut nasalized = false;
         while i < s.len() && ('\u{300}'..='\u{36F}').contains(&s[i]) {
+            nasalized |= s[i] == NASALIZED;
             i += 1;
         }
         if !known.contains(tok.as_str()) {
             continue;
         }
-        let is_v = tok.chars().next().is_some_and(|c| VOWEL_CHARS.contains(c)) && !super::inventory::consonant_symbols().contains(&tok.as_str());
-        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), ..Default::default() });
+        let is_v = is_vowel_token(&tok);
+        out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), nasalized: (is_v && nasalized).then_some(true), ..Default::default() });
         if is_v {
             stress = 0;
         }
     }
     out
+}
+
+fn is_vowel_token(tok: &str) -> bool {
+    tok.chars().next().is_some_and(|c| VOWEL_CHARS.contains(c)) && !super::inventory::consonant_symbols().contains(&tok)
 }
 
 fn starts_with_at(s: &[char], i: usize, m: &str) -> bool {

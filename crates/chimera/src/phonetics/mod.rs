@@ -38,6 +38,9 @@ pub struct Segment {
     /// before a vowel, not after /s/)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aspirated: Option<bool>,
+    /// a vowel said with the velum lowered (IPA combining tilde); None or false: oral
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nasalized: Option<bool>,
 }
 
 impl Segment {
