@@ -36,6 +36,115 @@ pub fn init() {
 }
 
 pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
+    tokenize(input, &mut Gaps::default())
+}
+
+/// What `tokenize` leaves out of its input without a word.
+#[derive(Default)]
+struct Gaps {
+    /// symbols it does not know
+    unknown: Vec<String>,
+    /// letters that carried a combining mark it does not model, and marks it reads written after a
+    /// sound they do not apply to (shown with that sound)
+    marked: Vec<String>,
+}
+
+fn add(list: &mut Vec<String>, item: String) {
+    if !list.contains(&item) {
+        list.push(item);
+    }
+}
+
+/// A lone combining mark is shown on a dotted circle, so it is visible.
+fn shown(s: &str) -> String {
+    if s.chars().next().is_some_and(|c| ('\u{300}'..='\u{36F}').contains(&c)) { format!("\u{25CC}{s}") } else { s.to_string() }
+}
+
+impl Gaps {
+    /// A mark the tokenizer reads, written after a sound it does not apply to (ʲ after a vowel, ʱ
+    /// after a voiceless stop): reported with that sound, or alone when no sound precedes it.
+    fn ignore(&mut self, after: Option<&Segment>, mark: char) {
+        add(
+            &mut self.marked,
+            match after {
+                Some(s) if s.ipa != "_" => format!("{}{mark}", s.ipa),
+                _ => shown(&mark.to_string()),
+            },
+        );
+    }
+}
+
+/// What the engine will not say as written in a piece of IPA text (see [`skipped_ipa`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedIpa {
+    /// symbols the tokenizer does not know (a tone letter, a click, a capital, a typo): dropped
+    pub unknown: Vec<String>,
+    /// symbols the tokenizer knows and the planner has no sound for (a vowel letter without a
+    /// calibrated vowel): dropped
+    pub no_sound: Vec<String>,
+    /// letters written with a mark the engine does not model (a devoicing ring, a syllabic mark),
+    /// or a mark it reads written where it cannot apply (`ʲ` after a vowel, `ʱ` after a voiceless
+    /// stop), shown with the letter: the letter is said, the mark is not
+    pub ignored_marks: Vec<String>,
+}
+
+impl SkippedIpa {
+    pub fn is_empty(&self) -> bool {
+        self.unknown.is_empty() && self.no_sound.is_empty() && self.ignored_marks.is_empty()
+    }
+
+    /// One line per kind that is not empty, ready to print.
+    pub fn warnings(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut line = |what: &str, items: &[String]| {
+            if !items.is_empty() {
+                out.push(format!("{what}: {}", items.join(" ")));
+            }
+        };
+        line("not said, symbols the engine does not know", &self.unknown);
+        line("not said, symbols the engine has no sound for", &self.no_sound);
+        line("said without the mark, which the engine does not model or cannot apply there", &self.ignored_marks);
+        out
+    }
+}
+
+/// Whether the planner has a sound for a symbol `tokenize_ipa` can emit: a calibrated vowel for
+/// some body, a diphthong made of them, or a consonant in the inventory.
+fn has_sound(sym: &str) -> bool {
+    use crate::anatomy::human::BodyMix;
+    [BodyMix::MALE, BodyMix::FEMALE, BodyMix::CHILD].into_iter().any(|b| super::planner::is_vowel(sym, b)) || consonant(sym).is_some()
+}
+
+/// What the engine will not say as written in `input`, in input order, each item once: symbols it
+/// does not know at all, symbols it knows but has no sound for (derived: `tokenize_ipa` emits
+/// them and the planner has no vowel or consonant for them, so the list shrinks as sounds are
+/// added), and marks it does not model or cannot apply (the letter is said, the mark is not).
+///
+/// The marks `tokenize_ipa` reads (`ʰ ˭`, a tilde or diaeresis below on a vowel, `ʲ`, `ʱ` where
+/// they apply), stress, length, tie bars, spaces and `. , |` are not reported, and neither is
+/// whitespace of other kinds. `tokenize_ipa` itself is unchanged and still drops these silently,
+/// so a caller that takes IPA from a person should show this.
+pub fn skipped_ipa(input: &str) -> SkippedIpa {
+    let mut g = Gaps::default();
+    let mut no_sound = Vec::new();
+    for seg in tokenize(input, &mut g) {
+        if seg.ipa != "_" && !has_sound(&seg.ipa) {
+            add(&mut no_sound, seg.ipa);
+        }
+    }
+    SkippedIpa { unknown: g.unknown, no_sound, ignored_marks: g.marked }
+}
+
+/// Every symbol `tokenize_ipa` can emit: the inventory's consonants, the vowel letters and the
+/// multi-letter affricates and diphthongs. Not every one has a sound (see [`skipped_ipa`]).
+pub fn known_ipa_symbols() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = known().iter().copied().collect();
+    v.sort_unstable();
+    v
+}
+
+fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
     let mut s = nfc(input);
     for (a, b) in ALIASES {
         s = s.replace(a, b);
@@ -81,28 +190,28 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
         }
         // palatalization, on a consonant made with a mouth gesture (not a glottal one)
         if ch == 'ʲ' {
-            if let Some(last) = out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.manner != Manner::Glottal)) {
-                last.palatalized = Some(true);
+            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.manner != Manner::Glottal)) {
+                Some(last) => last.palatalized = Some(true),
+                None => gaps.ignore(out.last(), ch),
             }
             i += 1;
             continue;
         }
         // a breathy-voiced release, on a voiced stop or affricate (Hindi bʱ dʱ gʱ)
         if ch == 'ʱ' {
-            if let Some(last) = out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.voicing == Voicing::Voiced && matches!(c.manner, Manner::Stop | Manner::Affricate))) {
-                last.breathy = Some(true);
+            match out.last_mut().filter(|l| consonant(&l.ipa).is_some_and(|c| c.voicing == Voicing::Voiced && matches!(c.manner, Manner::Stop | Manner::Affricate))) {
+                Some(last) => last.breathy = Some(true),
+                None => gaps.ignore(out.last(), ch),
             }
             i += 1;
             continue;
         }
         // a vowel mark after the length mark instead of the vowel (ɛː̃)
         if (ch == NASALIZED || ch == BREATHY) && i > 0 && (s[i - 1] == 'ː' || s[i - 1] == ':') {
-            if let Some(last) = out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
-                if ch == NASALIZED {
-                    last.nasalized = Some(true);
-                } else {
-                    last.breathy = Some(true);
-                }
+            match out.last_mut().filter(|l| is_vowel_token(&l.ipa)) {
+                Some(last) if ch == NASALIZED => last.nasalized = Some(true),
+                Some(last) => last.breathy = Some(true),
+                None => gaps.ignore(out.last(), ch),
             }
             i += 1;
             continue;
@@ -125,7 +234,9 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             tok = ch.to_string();
         }
         i += tok.chars().count();
-        // combining diacritics: the tilde and the diaeresis below are read, the rest we do not model
+        // combining diacritics: the tilde and the diaeresis below on a vowel are read, the rest we
+        // do not model
+        let marks_from = i;
         let (mut nasalized, mut breathy) = (false, false);
         while i < s.len() && ('\u{300}'..='\u{36F}').contains(&s[i]) {
             nasalized |= s[i] == NASALIZED;
@@ -133,9 +244,17 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
             i += 1;
         }
         if !known.contains(tok.as_str()) {
+            if !tok.chars().all(char::is_whitespace) {
+                add(&mut gaps.unknown, shown(&tok));
+            }
             continue;
         }
         let is_v = is_vowel_token(&tok);
+        // what is left unread: any mark but a tilde or diaeresis below on a vowel
+        let unread: String = s[marks_from..i].iter().copied().filter(|c| !(is_v && (*c == NASALIZED || *c == BREATHY))).collect();
+        if !unread.is_empty() {
+            add(&mut gaps.marked, format!("{tok}{unread}"));
+        }
         out.push(Segment { ipa: tok, stress: Some(if is_v { stress } else { 0 }), nasalized: (is_v && nasalized).then_some(true), breathy: (is_v && breathy).then_some(true), ..Default::default() });
         if is_v {
             stress = 0;
