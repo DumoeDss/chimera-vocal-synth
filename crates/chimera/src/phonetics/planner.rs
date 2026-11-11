@@ -171,6 +171,7 @@ struct Seg<'a> {
     vowel: Option<ArticPatch>,
     glide_from: bool,
     aspirated: Option<bool>,
+    vot: Option<f64>,
     nasalized: Option<bool>,
     palatalized: Option<bool>,
     breathy: Option<bool>,
@@ -210,10 +211,10 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
             let base = durs[si];
             for (i, p) in parts.iter().enumerate() {
                 let dur = if parts.len() > 1 { base * (if i == 0 { 0.55 } else { 0.45 }) } else { base };
-                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, nasalized: s.nasalized, palatalized: None, breathy: s.breathy });
+                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, vot: None, nasalized: s.nasalized, palatalized: None, breathy: s.breathy });
             }
         } else {
-            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, nasalized: s.nasalized, palatalized: s.palatalized, breathy: s.breathy });
+            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, vot: s.vot, nasalized: s.nasalized, palatalized: s.palatalized, breathy: s.breathy });
         }
     }
     for s in segs.iter_mut() {
@@ -338,8 +339,15 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
                 // as the front end says; by default English's rule: aspirated when syllable-initial
                 // before a vowel and not after /s/
                 let aspirated = s.aspirated.unwrap_or_else(|| next_vowel && !prev_seg.is_some_and(|p| p.ipa == "s"));
-                let vot = if aspirated { 0.05 / rate } else { 0.012 };
-                let g = Gesture::new(t0 + 0.25 * dur, t1 + vot * 0.4, 0.035, if aspirated { 0.045 } else { 0.02 }, 6.0, one(ControlKey::ABDUCTION, if aspirated { 0.36 } else { 0.22 })).label("aspiration");
+                // the folds stay apart past the release by 40% of the default 50 ms (the ramps
+                // make up the rest of the aspiration); a front end's longer or shorter `vot` moves
+                // that by the whole difference, so the voice onset time it asks for is what it gets
+                let past = match (aspirated, s.vot) {
+                    (true, None) => DEFAULT_VOT / rate * 0.4, // as before, to the bit
+                    (true, Some(v)) => js_max(0.0, 0.4 * DEFAULT_VOT + v - DEFAULT_VOT) / rate,
+                    (false, _) => 0.012 * 0.4,
+                };
+                let g = Gesture::new(t0 + 0.25 * dur, t1 + past, 0.035, if aspirated { 0.045 } else { 0.02 }, 6.0, one(ControlKey::ABDUCTION, if aspirated { 0.36 } else { 0.22 })).label("aspiration");
                 voiced_again = g.end();
                 gestures.push(g);
             } else {
@@ -480,6 +488,8 @@ fn place_rank(place: &str) -> Option<u8> {
 /// How much later a pre-placed closure behind another stop's closure is aimed (s): the time its
 /// shorter travel saves, so it seals as the front closure opens.
 const PLACED_CLOSURE_DELAY: f64 = 0.025;
+/// An aspirated stop's voice onset time when its front end doesn't say (English's), in seconds.
+const DEFAULT_VOT: f64 = 0.05;
 
 /// Whether stop `i` closes behind the closure of the stop before it, with its own articulators
 /// already set by the consonant before that one (/t/ in /ɹpt/: the tip is up for the /ɹ/ and

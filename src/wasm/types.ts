@@ -157,6 +157,8 @@ export interface Segment {
   wordEnd?: boolean;
   /** a voiceless stop or affricate's aspiration as its front end decides it (unset: English's rule) */
   aspirated?: boolean;
+  /** how long an aspirated stop aspirates (s); unset: 50 ms */
+  vot?: number;
   /** a vowel said with the velum lowered (IPA combining tilde) */
   nasalized?: boolean;
   /** a consonant with a secondary palatal gesture, the tongue body raised and fronted (IPA ʲ) */

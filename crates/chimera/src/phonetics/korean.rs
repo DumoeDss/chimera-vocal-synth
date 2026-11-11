@@ -6,7 +6,8 @@
 //!
 //! Stops say their own aspiration (Segment::aspirated): aspirated ㅋ ㅌ ㅍ ㅊ are aspirated, and
 //! tense ㄲ ㄸ ㅃ ㅉ are voiceless and unaspirated (the engine has no stiff "fortis" phonation yet).
-//! Lax stops keep the planner's default: aspirated word-initially, voiced between voiced sounds.
+//! Lax stops aspirate briefly word-initially and aspirated ones long (Segment::vot); lax stops are
+//! voiced between voiced sounds.
 //! ㅈ ㅊ ㅉ are alveolo-palatal [tɕ], and ㅅ ㅆ before [i] or [j] are [ɕ].
 
 use super::syllables::FrontEnd;
@@ -157,32 +158,44 @@ fn join(a: &mut Block, b: &mut Block) {
 }
 
 /// An initial's sound, and its aspiration when the letter decides it (None: the planner's default).
-fn onset_ipa(o: char, voiced_before: bool, front: bool, after_l: bool) -> (&'static str, Option<bool>) {
+/// Korean's three stops, word-initially all voiceless, told apart by how long they aspirate:
+/// aspirated ㅋ ㅌ ㅍ ㅊ long, lax ㄱ ㄷ ㅂ ㅈ briefly, tense ㄲ ㄸ ㅃ ㅉ not at all (word-initial voice
+/// onset times of about 90, 45 and 10 ms). Between voiced sounds a lax stop is voiced.
+const ASPIRATED_VOT: f64 = 0.09;
+const LAX_VOT: f64 = 0.045;
+
+/// An initial → its IPA, whether it aspirates, and for how long (s).
+fn onset_ipa(o: char, voiced_before: bool, front: bool, after_l: bool) -> (&'static str, Option<bool>, Option<f64>) {
+    let lax = |voiced: &'static str, voiceless: &'static str| {
+        if voiced_before {
+            (voiced, None, None)
+        } else {
+            (voiceless, Some(true), Some(LAX_VOT))
+        }
+    };
+    let aspirated = |ipa: &'static str| (ipa, Some(true), Some(ASPIRATED_VOT));
+    let tense = |ipa: &'static str| (ipa, Some(false), None);
     match o {
-        'ㄱ' if voiced_before => ("g", None),
-        'ㄱ' => ("k", None),
-        'ㅋ' => ("k", Some(true)),
-        'ㄲ' => ("k", Some(false)),
-        'ㄷ' if voiced_before => ("d", None),
-        'ㄷ' => ("t", None),
-        'ㅌ' => ("t", Some(true)),
-        'ㄸ' => ("t", Some(false)),
-        'ㅂ' if voiced_before => ("b", None),
-        'ㅂ' => ("p", None),
-        'ㅍ' => ("p", Some(true)),
-        'ㅃ' => ("p", Some(false)),
-        'ㅈ' if voiced_before => ("dʑ", None),
-        'ㅈ' => ("tɕ", None),
-        'ㅊ' => ("tɕ", Some(true)),
-        'ㅉ' => ("tɕ", Some(false)),
-        'ㅅ' | 'ㅆ' if front => ("ɕ", None),
-        'ㅅ' | 'ㅆ' => ("s", None),
-        'ㅎ' if voiced_before => ("ɦ", None),
-        'ㅎ' => ("h", None),
-        'ㄴ' => ("n", None),
-        'ㅁ' => ("m", None),
-        'ㄹ' if after_l => ("l", None),
-        'ㄹ' => ("ɾ", None),
+        'ㄱ' => lax("g", "k"),
+        'ㅋ' => aspirated("k"),
+        'ㄲ' => tense("k"),
+        'ㄷ' => lax("d", "t"),
+        'ㅌ' => aspirated("t"),
+        'ㄸ' => tense("t"),
+        'ㅂ' => lax("b", "p"),
+        'ㅍ' => aspirated("p"),
+        'ㅃ' => tense("p"),
+        'ㅈ' => lax("dʑ", "tɕ"),
+        'ㅊ' => aspirated("tɕ"),
+        'ㅉ' => tense("tɕ"),
+        'ㅅ' | 'ㅆ' if front => ("ɕ", None, None),
+        'ㅅ' | 'ㅆ' => ("s", None, None),
+        'ㅎ' if voiced_before => ("ɦ", None, None),
+        'ㅎ' => ("h", None, None),
+        'ㄴ' => ("n", None, None),
+        'ㅁ' => ("m", None, None),
+        'ㄹ' if after_l => ("l", None, None),
+        'ㄹ' => ("ɾ", None, None),
         _ => unreachable!("not an initial: {o}"),
     }
 }
@@ -218,8 +231,8 @@ pub fn word_syllables(word: &str) -> Vec<Syllable> {
         let mut onset: Vec<Segment> = b
             .onset
             .map(|o| {
-                let (ipa, aspirated) = onset_ipa(o, voiced_before, front, prev_coda == Some('ㄹ'));
-                Segment { aspirated, ..Segment::new(ipa) }
+                let (ipa, aspirated, vot) = onset_ipa(o, voiced_before, front, prev_coda == Some('ㄹ'));
+                Segment { aspirated, vot, ..Segment::new(ipa) }
             })
             .into_iter()
             .collect();
