@@ -28,7 +28,7 @@ fn cdur(ipa: &str, body: BodyMix, k: f64) -> f64 {
 }
 
 fn consonants(segs: &[Segment], body: BodyMix, k: f64) -> Vec<Segment> {
-    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(cdur(&c.ipa, body, k)), aspirated: c.aspirated, ..Default::default() }).collect()
+    segs.iter().map(|c| Segment { ipa: c.ipa.clone(), dur: Some(cdur(&c.ipa, body, k)), aspirated: c.aspirated, palatalized: c.palatalized, ..Default::default() }).collect()
 }
 
 /// A sung vowel (or one half of a diphthong) at the note's pitch, with the sound marks of the

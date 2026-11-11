@@ -159,6 +159,8 @@ export interface Segment {
   aspirated?: boolean;
   /** a vowel said with the velum lowered (IPA combining tilde) */
   nasalized?: boolean;
+  /** a consonant with a secondary palatal gesture, the tongue body raised and fronted (IPA ʲ) */
+  palatalized?: boolean;
 }
 
 export interface PlannedSegment {

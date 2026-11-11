@@ -1,6 +1,7 @@
 //! IPA string → segments (stress ˈ ˌ, length ː, tie bars, affricates, diphthongs, word gaps).
 
 use super::Segment;
+use super::inventory::Manner;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -73,6 +74,14 @@ pub fn tokenize_ipa(input: &str) -> Vec<Segment> {
         if ch == 'ʰ' || ch == '˭' {
             if let Some(last) = out.last_mut() {
                 last.aspirated = Some(ch == 'ʰ');
+            }
+            i += 1;
+            continue;
+        }
+        // palatalization, on a consonant made with a mouth gesture (not a glottal one)
+        if ch == 'ʲ' {
+            if let Some(last) = out.last_mut().filter(|l| super::inventory::consonants().iter().any(|c| c.ipa == l.ipa && c.manner != Manner::Glottal)) {
+                last.palatalized = Some(true);
             }
             i += 1;
             continue;

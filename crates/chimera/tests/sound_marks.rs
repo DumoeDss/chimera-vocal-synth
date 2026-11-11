@@ -109,3 +109,89 @@ fn a_sung_vowel_keeps_its_nasalization() {
     let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl(vec![], diph) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0 });
     assert_eq!(labelled(&p.gestures, "velum").len(), 2);
 }
+
+fn palatalized(s: &Segment) -> Option<bool> {
+    s.palatalized
+}
+
+#[test]
+fn the_modifier_j_palatalizes_the_consonant_before_it() {
+    assert_eq!(flags("tʲa", palatalized), pairs(&[("t", true), ("a", false)]));
+    assert_eq!(flags("pʲ kʲ dʒʲ ɡʲ", palatalized), pairs(&[("p", true), ("k", true), ("dʒ", true), ("g", true)]));
+    // with the other marks, in either order
+    let s = tokenize_ipa("pʰʲ");
+    assert_eq!((s[0].aspirated, s[0].palatalized), (Some(true), Some(true)));
+}
+
+#[test]
+fn a_palatal_mark_on_the_wrong_sound_is_ignored() {
+    // a vowel, a glottal (no mouth gesture), a pause, and no sound at all
+    for ipa in ["aʲ", "ɛʲ", "hʲ", "ʔʲ", "ɦʲ", "ʲ", "ʲt", "|ʲ"] {
+        assert!(tokenize_ipa(ipa).iter().all(|s| s.palatalized.is_none()), "{ipa}");
+    }
+    assert_eq!(tokenize_ipa("aʲ"), tokenize_ipa("a"));
+}
+
+#[test]
+fn the_owners_russian_pair_now_differs() {
+    // брат / брать were both "b r ɑ t"
+    let (brat, brat_soft) = (tokenize_ipa("brɑt"), tokenize_ipa("brɑtʲ"));
+    assert_ne!(brat, brat_soft);
+    assert_eq!(brat.iter().map(|s| &s.ipa).collect::<Vec<_>>(), brat_soft.iter().map(|s| &s.ipa).collect::<Vec<_>>());
+    assert_eq!(brat_soft.iter().map(|s| s.palatalized).collect::<Vec<_>>(), [None, None, None, Some(true)]);
+}
+
+#[test]
+fn a_palatalized_consonant_gets_a_tongue_body_gesture_that_leaves_its_own_alone() {
+    let own = |ipa: &str| chimera::phonetics::inventory::phoneme(ipa, BodyMix::MALE).unwrap().dominant;
+    for c in ["p", "t", "d", "k", "g", "s", "ʃ", "n", "m", "l", "f", "ɹ", "tʃ"] {
+        let plain = plan(&tokenize_ipa(&format!("{c}a")));
+        let soft = plan(&tokenize_ipa(&format!("{c}ʲa")));
+        assert!(labelled(&plain.gestures, "palatalized").is_empty(), "{c}");
+        let g = labelled(&soft.gestures, "palatalized");
+        assert_eq!(g.len(), 1, "{c}");
+        // only the tongue body, and never a coordinate the consonant's closure or constriction owns
+        for k in ArticKey::ALL {
+            if g[0].targets.get(k).is_some() {
+                assert!(matches!(k, ArticKey::TbX | ArticKey::TbY), "{c}: {k:?}");
+                assert!(!own(c).contains(&k), "{c} owns {k:?}");
+            }
+        }
+        // the consonant's own gestures and everything else are unchanged
+        let rest = |p: &Plan| serde_json::to_string(&p.gestures.iter().filter(|g| g.label.as_ref().is_none_or(|l| l.as_str() != "palatalized")).collect::<Vec<_>>()).unwrap();
+        assert_eq!(rest(&plain), rest(&soft), "{c}");
+    }
+    // a velar is fronted, not raised: its closure owns the body's height
+    let k = plan(&tokenize_ipa("kʲa"));
+    let g = labelled(&k.gestures, "palatalized")[0];
+    assert!(g.targets.get(ArticKey::TbX).is_some() && g.targets.get(ArticKey::TbY).is_none());
+    // a consonant with nothing free on the body, or already palatal, adds no gesture
+    for c in ["j", "ɲ", "w", "ɫ", "q"] {
+        assert!(labelled(&plan(&tokenize_ipa(&format!("{c}ʲa"))).gestures, "palatalized").is_empty(), "{c}");
+    }
+}
+
+#[test]
+fn the_palatal_posture_holds_until_the_voice_returns() {
+    // after an aspirated stop that is later than the release: the [j]-like transition is voiced
+    let seg = |aspirated| vec![Segment { aspirated, palatalized: Some(true), ..Segment::new("t") }, Segment::new("a")];
+    let end = |aspirated| labelled(&plan(&seg(aspirated)).gestures, "palatalized")[0].t1;
+    let t1 = plan(&seg(None)).segments[0].t1;
+    assert!(end(Some(true)) > t1 + 0.05, "aspirated: {}", end(Some(true)) - t1);
+    assert!(end(Some(false)) < t1 + 0.03, "unaspirated: {}", end(Some(false)) - t1);
+}
+
+#[test]
+fn a_sung_consonant_keeps_its_palatalization() {
+    let onset = |soft| vec![Segment { palatalized: soft, ..Segment::new("t") }];
+    let sung = |s| plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: syl(onset(s), Segment::new("a")) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0 });
+    assert_eq!(labelled(&sung(Some(true)).gestures, "palatalized").len(), 1);
+    assert!(labelled(&sung(None).gestures, "palatalized").is_empty());
+    let live = |s| plan_note_on(&syl(onset(s), Segment::new("a")), 57.0, &NoteOnOptions { body: "male".into(), vibrato: 0.0, tag: 1.0, legato_from: None });
+    assert_eq!(labelled(&live(Some(true)), "palatalized").len(), 1);
+    assert!(labelled(&live(None), "palatalized").is_empty());
+    // a coda too
+    let coda = |s| Syllable { coda: onset(s), ..syl(vec![], Segment::new("a")) };
+    let p = plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: coda(Some(true)) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0 });
+    assert_eq!(labelled(&p.gestures, "palatalized").len(), 1);
+}

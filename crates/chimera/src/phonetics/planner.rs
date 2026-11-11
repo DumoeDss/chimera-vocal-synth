@@ -172,6 +172,7 @@ struct Seg<'a> {
     glide_from: bool,
     aspirated: Option<bool>,
     nasalized: Option<bool>,
+    palatalized: Option<bool>,
 }
 
 /// velum port area (cm²) of a nasalized vowel, and the ramps of its lowering and raising (s)
@@ -202,10 +203,10 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
             let base = durs[si];
             for (i, p) in parts.iter().enumerate() {
                 let dur = if parts.len() > 1 { base * (if i == 0 { 0.55 } else { 0.45 }) } else { base };
-                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, nasalized: s.nasalized });
+                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, nasalized: s.nasalized, palatalized: None });
             }
         } else {
-            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, nasalized: s.nasalized });
+            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, nasalized: s.nasalized, palatalized: s.palatalized });
         }
     }
     for s in segs.iter_mut() {
@@ -311,6 +312,7 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
         }
         // phonation
         let k2 = 1.0; // abduction is body-scaled in the voice
+        let mut voiced_again = t1; // when the folds are back, after an aspirated release
         if def.glottal == Some(Glottal::Open) {
             gestures.push(Gesture::new(t0 - 0.01, t1, 0.03, 0.035, 5.0, one(ControlKey::ABDUCTION, 0.33 * k2)).label("h"));
         } else if def.glottal == Some(Glottal::Breathy) {
@@ -323,12 +325,21 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
                 // before a vowel and not after /s/
                 let aspirated = s.aspirated.unwrap_or_else(|| next_vowel && !prev_seg.is_some_and(|p| p.ipa == "s"));
                 let vot = if aspirated { 0.05 / rate } else { 0.012 };
-                gestures.push(Gesture::new(t0 + 0.25 * dur, t1 + vot * 0.4, 0.035, if aspirated { 0.045 } else { 0.02 }, 6.0, one(ControlKey::ABDUCTION, if aspirated { 0.36 } else { 0.22 })).label("aspiration"));
+                let g = Gesture::new(t0 + 0.25 * dur, t1 + vot * 0.4, 0.035, if aspirated { 0.045 } else { 0.02 }, 6.0, one(ControlKey::ABDUCTION, if aspirated { 0.36 } else { 0.22 })).label("aspiration");
+                voiced_again = g.end();
+                gestures.push(g);
             } else {
                 gestures.push(Gesture::new(t0 - 0.015, t1 + 0.005, 0.03, 0.03, 6.0, one(ControlKey::ABDUCTION, 0.3)).label("voiceless"));
             }
         } else if def.manner == Manner::Fricative {
             gestures.push(Gesture::new(t0, t1, 0.03, 0.03, 3.0, one(ControlKey::ABDUCTION, 0.035)).label("voiced frication"));
+        }
+        // palatalization: the tongue body goes toward /j/ under the consonant, stays there until the
+        // voice returns, and lets go into the vowel, so the release carries the [j]-like transition
+        if s.palatalized == Some(true) {
+            if let Some(tg) = palatal_body(def, body) {
+                gestures.push(Gesture::new(t0, voiced_again, PALATAL_RAMP, PALATAL_RAMP, PALATAL_STRENGTH, artic_targets(&tg)).label("palatalized"));
+            }
         }
     }
     let open_end = o.open_end == Some(true);
@@ -408,6 +419,26 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
         }
     }
     Plan { gestures, segments: planned, end }
+}
+
+/// How firmly a palatalized consonant's tongue body is held (the overlapping vowel has 1.0, the
+/// consonant's own articulators 40), and how long it takes to take and let go of the posture (s)
+const PALATAL_STRENGTH: f64 = 3.0;
+const PALATAL_RAMP: f64 = 0.04;
+
+/// The tongue body's posture for a palatalized consonant: /j/'s, on the coordinates the consonant
+/// itself does not use. A velar closes with the body's height, so only its front-back
+/// place moves (fronted); a consonant with no free body coordinate (palatals, uvulars, /w/, /ɫ/,
+/// glottals) has nothing to add.
+fn palatal_body(def: &PhonemeDef, body: BodyMix) -> Option<ArticPatch> {
+    let j = phoneme("j", body)?;
+    let mut out = ArticPatch::default();
+    for k in [ArticKey::TbX, ArticKey::TbY] {
+        if let (false, Some(x)) = (def.dominant.contains(&k), j.targets.get(k)) {
+            out.set(k, x);
+        }
+    }
+    (!out.is_empty() && def.place != "palatal" && def.manner != Manner::Glottal).then_some(out)
 }
 
 /// Front-to-back order of the oral places of articulation.
