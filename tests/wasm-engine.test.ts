@@ -3,12 +3,13 @@
  * for bit) on the voice scenarios, driven through the gesture-record codec the worklet uses.
  * Needs `bun run wasm` (the wasm build) and cargo (it renders the native reference).
  */
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
 import { writeGestures, CONTROL_KEYS, GESTURE_RECORD } from "../src/wasm/wire.ts";
 import type { Gesture } from "../src/wasm/types.ts";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WASM = `${ROOT}target/wasm32-unknown-unknown/release/chimera_wasm.wasm`;
 const SOURCE_KEYS = ["f0", "glide", "pressure", "breathiness", "tension", "fry", "roughness", "vibratoDepth", "vibratoRate", "drift", "voiced", "brightness"];
 
