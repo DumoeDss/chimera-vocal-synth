@@ -168,7 +168,8 @@ A sung syllable per sounding note:
   to does nothing. What each does is in [architecture.md](architecture.md), section 4.
 - `pitch`: bends that colour the note's start or end, `st` semitones from the note, over `len` of the
   vowel and at most `max` seconds. The melody stays as written. A start bend begins in the onset,
-  so a rising tone starts low rather than starting at the note and dipping.
+  so a rising tone starts low rather than starting at the note and dipping. A sung song does not
+  draw them by default: see "Tone bends are off in singing".
 - `breath`: lung drive while the note sounds, relative to the phrase's (unsaid: the phrase's).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: the song's
   `nasalLead`, off by default).
@@ -256,6 +257,22 @@ dense in what each touches:
 
 The biggest wins came from the sounds the recogniser confused most: the apical vowels (是 heard as
 虚) and the medial glides (话 drifting toward 哈).
+
+### Tone bends are off in singing
+
+The front end still writes a Mandarin tone's bends into each syllable's `pitch` (2 and 3 scoop up
+from 3.5 and 4 semitones below, 4 starts 1.5 above and drops 4 at the note's end), and `tone_bends`
+and its tests are unchanged. But the sing planner draws them only as strongly as the song asks:
+`SongOptions::bend_strength`, `"bendStrength"` in a melody file, `bendStrength` in the app's
+`SongExtras`. The default is 0, the melody as written; 1 draws the bends exactly as the front end
+wrote them (`tests/bends.rs`); in between scales their semitones.
+
+Why: the ASR score preferred the bends (about 4 points, table above) and the ears did not. A native
+Mandarin speaker listening to the demo song heard "a foreigner reciting the tones while singing",
+and four independent listening diagnoses agreed with him: the scoops and the fall at a note's end
+sound out of tune against the tune. In sung Mandarin the melody overrides the lexical tone, and
+the tone is carried by the words and the context. The scramble numbers above were measured with
+bends on; to reproduce them pass `--melody '{"bendStrength": 1}'` to `tools/asr/scramble.py`.
 
 ### Reading what goes wrong
 

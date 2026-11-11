@@ -1,5 +1,6 @@
 //! Pitch bends: a syllable's front end shapes the pitch inside its note (start or end, capped in
-//! length); none leaves the note as written. And the vowel before a nasal coda is nasalised only
+//! length) when the song asks for them (`bend_strength` 1; by default, 0, the melody stays as
+//! written); none leaves the note as written. And the vowel before a nasal coda is nasalised only
 //! when asked.
 use chimera::anatomy::human::ArticKey;
 use chimera::control::score::{ControlKey, Gesture};
@@ -9,8 +10,9 @@ use chimera::phonetics::{Bend, Edge, Segment, Syllable};
 fn syl(onset: &str, v: &str, coda: &[&str], pitch: Vec<Bend>) -> Syllable {
     Syllable { text: v.into(), onset: vec![Segment::new(onset)], nucleus: Segment::new(v), coda: coda.iter().map(|c| Segment::new(c)).collect(), word_end: true, pitch, ..Default::default() }
 }
+/// the bends drawn as the front end wrote them (bend_strength 1); the default draws none
 fn opts(nasal_lead: Option<f64>) -> SongOptions {
-    SongOptions { body: "male".into(), bpm: 60.0, t0: 0.5, nasal_lead, ..Default::default() }
+    SongOptions { body: "male".into(), bpm: 60.0, t0: 0.5, nasal_lead, bend_strength: Some(1.0), ..Default::default() }
 }
 fn labelled<'a>(gs: &'a [Gesture], l: &str) -> Vec<&'a Gesture> {
     gs.iter().filter(|g| g.label.as_ref().is_some_and(|x| x.as_str() == l)).collect()
@@ -90,4 +92,50 @@ fn before_ng_after_a_back_vowel_the_tongue_rises_toward_the_velum() {
     // no nasal lead, no approach
     let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("t", "ɑ", &["ŋ"], vec![]) }], &opts(None));
     assert!(labelled(&p.gestures, "coda approach").is_empty());
+}
+
+/// a Mandarin 2nd and 4th tone's bends, as the front end writes them
+fn tone_syl() -> Syllable {
+    syl("m", "a", &[], vec![Bend { at: Edge::Start, len: 0.45, max: 0.25, st: -3.5 }, Bend { at: Edge::End, len: 0.4, max: 0.2, st: -4.0 }])
+}
+
+fn plan_with(strength: Option<f64>, syl: Syllable) -> chimera::phonetics::Plan {
+    let o = SongOptions { bend_strength: strength, ..opts(None) };
+    plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl }], &o)
+}
+
+#[test]
+fn by_default_the_melody_is_sung_as_written() {
+    // singing follows the melody: no bend gestures and the onset on the note's pitch, so the plan is
+    // exactly the plan of the same syllable with no bends at all; 0 says the same as unset
+    let plain = Syllable { pitch: vec![], ..tone_syl() };
+    let want = serde_json::to_string(&plan_with(None, plain.clone())).unwrap();
+    for strength in [None, Some(0.0), Some(-1.0)] {
+        let p = plan_with(strength, tone_syl());
+        assert!(labelled(&p.gestures, "bend").is_empty(), "{strength:?}");
+        assert_eq!(serde_json::to_string(&p).unwrap(), want, "{strength:?}");
+    }
+    let hz = midi_to_hz(57.0);
+    assert!(plan_with(None, tone_syl()).gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch")).filter_map(|g| g.targets.get(ControlKey::F0)).all(|f| (f - hz).abs() < 1e-9));
+}
+
+#[test]
+fn strength_one_draws_the_bends_as_written_and_scales_them() {
+    let hz = midi_to_hz(57.0);
+    let ratio = |p: &chimera::phonetics::Plan| labelled(&p.gestures, "bend").iter().map(|g| g.targets.get(ControlKey::F0).unwrap() / hz).collect::<Vec<_>>();
+    // 1: today's bends, to the semitone (the same numbers `bends_colour_the_start_or_end...` checks)
+    let one = plan_with(Some(1.0), tone_syl());
+    let r = ratio(&one);
+    assert_eq!(r.len(), 2);
+    assert!((r[0] - 2f64.powf(-3.5 / 12.0)).abs() < 1e-12 && (r[1] - 2f64.powf(-4.0 / 12.0)).abs() < 1e-12, "{r:?}");
+    // the bends' timing is the data's, whatever the strength; only the semitones scale
+    let half = plan_with(Some(0.5), tone_syl());
+    let h = ratio(&half);
+    assert!((h[0] - 2f64.powf(-1.75 / 12.0)).abs() < 1e-12 && (h[1] - 2f64.powf(-2.0 / 12.0)).abs() < 1e-12, "{h:?}");
+    let spans = |p: &chimera::phonetics::Plan| labelled(&p.gestures, "bend").iter().map(|g| (g.t0, g.t1)).collect::<Vec<_>>();
+    assert_eq!(spans(&one), spans(&half));
+    // and the start bend's pitch carries into the onset consonant
+    let onset = |p: &chimera::phonetics::Plan| p.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).next().unwrap();
+    assert!((onset(&one) / hz - 2f64.powf(-3.5 / 12.0)).abs() < 1e-9);
+    assert!((onset(&half) / hz - 2f64.powf(-1.75 / 12.0)).abs() < 1e-9);
 }

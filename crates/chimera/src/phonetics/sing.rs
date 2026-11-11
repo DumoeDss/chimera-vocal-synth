@@ -129,6 +129,12 @@ pub struct SongOptions {
     /// sung consonant length relative to spoken (None: SUNG_CONSONANTS, 1.25)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consonant_scale: Option<f64>,
+    /// how strongly a syllable's pitch bends (a Mandarin tone's scoop or fall, `Syllable::pitch`) are
+    /// drawn: their semitones times this. None or 0: the melody as written, the bends ignored (what
+    /// a sung song wants: in singing the melody overrides lexical tone); 1: the front end's bends as
+    /// it wrote them
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bend_strength: Option<f64>,
 }
 
 /// A bend's blending strength against the note's own pitch (6): it wins while it lasts.
@@ -184,8 +190,9 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         let hz_of = |k: usize| midi_to_hz(notes[k].midi);
         // a bend at the vowel's start begins in the onset: the consonants already sing its pitch, so
         // a rising tone starts low instead of starting at the note and dipping
+        let strength = js_max(0.0, o.bend_strength.unwrap_or(0.0));
         let onset_hz = |k: usize| {
-            let start = notes[k].syl.pitch.iter().find(|b| b.at == Edge::Start).map_or(0.0, |b| b.st);
+            let start = if strength > 0.0 { notes[k].syl.pitch.iter().find(|b| b.at == Edge::Start).map_or(0.0, |b| b.st * strength) } else { 0.0 };
             hz_of(k) * crate::math::pow(2.0, start / 12.0)
         };
         let mut onsets: Vec<Vec<Segment>> = (i..=j)
@@ -253,7 +260,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             segs.extend(coda);
             vowel_spans.push((times[k], times[k] + vdur));
             // bends shape their syllable's first note (a melisma continues at the written pitches)
-            if !n.syl.pitch.is_empty() && !melisma(&n.syl) {
+            if strength > 0.0 && !n.syl.pitch.is_empty() && !melisma(&n.syl) {
                 bend_spans.push((k, times[k], times[k] + vdur));
             }
         }
@@ -263,7 +270,8 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             gestures.extend_from_slice(&plan.gestures);
             segments.extend(plan.segments);
             for &(k, a, b) in &bend_spans {
-                bend_gestures(&notes[k].syl.pitch, hz_of(k), a, b, &mut gestures);
+                let bends: Vec<Bend> = notes[k].syl.pitch.iter().map(|x| Bend { st: x.st * strength, ..*x }).collect();
+                bend_gestures(&bends, hz_of(k), a, b, &mut gestures);
             }
             for &(a, b, lead, place) in &nasal_spans {
                 let t0 = b - js_min(lead * (b - a), 0.25);

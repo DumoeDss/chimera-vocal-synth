@@ -213,10 +213,12 @@ export interface Bend {
   st: number;
 }
 
-/** Optional sing-planner settings: nasalised vowels before a nasal coda, sung consonant length. */
+/** Optional sing-planner settings: nasalised vowels before a nasal coda, sung consonant length, tone bends. */
 export interface SongExtras {
   nasalLead?: number;
   consonantScale?: number;
+  /** how strongly a syllable's pitch bends (a Mandarin tone) are drawn: 0 or unset, the melody as written; 1, the front end's bends */
+  bendStrength?: number;
 }
 
 export interface SungNote {
