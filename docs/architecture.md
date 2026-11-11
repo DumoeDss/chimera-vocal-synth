@@ -134,6 +134,18 @@ branching (nasal tract, sinuses, piriform fossae, two bronchi, vocal sacs, OEC).
 * Text: CMUdict (lazy-loaded, compact) + rule fallback → ARPAbet → IPA; stress;
   syllabification; Klatt-style durations; intonation (declination, H* on stressed
   syllables, final fall / question rise). Singing: notes+lyrics → syllable alignment.
+* IPA sound marks ([#32](https://github.com/jamesondh/chimera-vocal-synth/issues/32) step 1):
+  `tokenize_ipa` keeps four marks as flags on the segment, so sounds that differ only by one
+  (Hindi पल/फल, French paix/pain, Russian брат/брать) stay different, and the planner turns each
+  into gestures on controls the engine already has. `ʰ` `˭` (`aspirated`): the glottal opening at
+  a stop's release, which replaces English's rule when set. A combining tilde on a vowel
+  (`nasalized`, also the precomposed ã õ ẽ ĩ ũ ỹ): the velum lowers (0.3 cm²) for the vowel.
+  `ʲ` after a consonant (`palatalized`): the tongue body goes toward /j/ under the consonant and
+  stays until the voice returns (a velar is only fronted; the consonant's own closure is never
+  touched). `ʱ` after a voiced stop or affricate and a combining diaeresis below on a vowel
+  (`breathy`): glottal abduction of 0.1, as for /ɦ/, over the release and 80 ms after it, or over
+  the vowel. A mark on a sound it doesn't apply to is ignored, and with no flag set the plan is
+  the one English always had. Other IPA diacritics are still dropped.
 
 ## 5. FX / output
 
