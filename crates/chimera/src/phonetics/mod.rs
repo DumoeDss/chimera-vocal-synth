@@ -108,8 +108,11 @@ pub struct Syllable {
     /// continue the previous syllable's vowel at a new pitch
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub melisma: Option<bool>,
-    /// last syllable of a word (codas sound here; phrase breaks follow punctuation)
+    /// last syllable of a word (codas sound here; phrase breaks follow punctuation); may be left
+    /// out of hand-written JSON (false)
+    #[serde(default)]
     pub word_end: bool,
-    /// a breath follows (comma, full stop, line break)
+    /// a breath follows (comma, full stop, line break); may be left out (false)
+    #[serde(default)]
     pub phrase_end: bool,
 }

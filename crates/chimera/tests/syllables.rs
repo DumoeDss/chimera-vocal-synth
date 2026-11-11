@@ -144,3 +144,10 @@ fn hangul_keeps_its_spelling_and_mixes_with_english() {
         [("twin", false, false), ("kle", true, false), ("빵", false, false), ("야", true, false), ("빵", false, false), ("야", true, true), ("star", true, false)]
     );
 }
+
+#[test]
+fn hand_written_syllables_may_leave_out_word_and_phrase_ends() {
+    let s: chimera::phonetics::Syllable = serde_json::from_str(r#"{"text": "풀", "onset": [{"ipa": "p", "aspirated": true, "vot": 0.09}], "nucleus": {"ipa": "u"}, "coda": [{"ipa": "l"}]}"#).unwrap();
+    assert!(!s.word_end && !s.phrase_end);
+    assert_eq!(s.onset[0].vot, Some(0.09));
+}

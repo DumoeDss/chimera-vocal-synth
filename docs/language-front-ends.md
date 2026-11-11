@@ -66,14 +66,17 @@ Every front end writes the same thing, one sung syllable per sounding note:
 
 - `onset` / `coda`: consonants and glides from the inventory (`phonetics/inventory.rs`).
 - A stop or affricate may say `"aspirated": true|false` (unsaid: English's rule; `ʰ` and `˭` in
-  IPA text) and `"vot"`, how long its aspiration lasts in seconds (unsaid: English's 50 ms). Each
-  millisecond more or less than 50 moves the voice's return by a millisecond.
+  IPA text) and `"vot"`, its aspiration time in seconds relative to the 50 ms default (unsaid:
+  English's 50 ms). Each millisecond more or less than 50 moves the voice's return by a
+  millisecond; the measured voice onset also depends on the place and the voice (the Korean table
+  above: 45 asked gives 53–69 ms, 90 gives 96–110).
 - `nucleus`: one vowel, or a diphthong the planner knows.
 - A melisma note is `"melisma": true` with the same nucleus; its coda moves to the run's last note.
 - `text` is what the lyrics panel and the piano roll show.
+- `wordEnd` and `phraseEnd` may be left out (false).
 
 Any front end's output can be frozen to JSON, edited and sung with `"syllables"` instead of
-`"lyrics"`, in `render notes`, `DemoSong.syllables` and duet melody files. Use it to fix a reading
+`"lyrics"`, in `render notes` and duet melody files. Use it to fix a reading
 by hand, or to sing a language that has no front end yet.
 
 ## Adding a language

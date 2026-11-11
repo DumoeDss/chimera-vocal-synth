@@ -6,7 +6,7 @@ use chimera::phonetics::ipa::tokenize_ipa;
 #[test]
 fn affricates_tokenize_as_one_segment() {
     let ipa: Vec<String> = tokenize_ipa("tɕi tɕʰi dʑa tʂa dʐu ɕy ʑə ɥɛ").into_iter().map(|s| s.ipa).collect();
-    // ʰ is not modelled and drops, as before
+    // ʰ isn't a segment: it sets the stop's aspiration (#73)
     assert_eq!(ipa, ["tɕ", "i", "tɕ", "i", "dʑ", "a", "tʂ", "a", "dʐ", "u", "ɕ", "y", "ʑ", "ə", "ɥ", "ɛ"]);
 }
 
