@@ -86,9 +86,20 @@ fn formants(air: &mut HumanAirway, freqs: &[f64], a: &HumanArtic) -> (Vec<f64>, 
 }
 
 /// Articulatory vowel targets fitted to reference formants with the frequency-domain airway
-/// model. `calibrate vowels [male|female|child|all] [--out file]`
+/// model. `calibrate vowels [male|female|child|all] [--missing] [--out file]`
+///
+/// `--missing` fits only the vowels of `VOWELS` that the table lacks, and keeps every entry it
+/// already has byte for byte (the fit isn't bit-reproducible, so a full rerun moves old entries
+/// by ±0.001–0.002). New entries are appended after the old ones.
 pub fn vowels(a: &[String]) -> Result<(), String> {
-    let (rest, out) = out_option(a, VOWEL_TABLE)?;
+    let (mut rest, out) = out_option(a, VOWEL_TABLE)?;
+    let missing_only = match rest.iter().position(|x| x == "--missing") {
+        Some(i) => {
+            rest.remove(i);
+            true
+        }
+        None => false,
+    };
     let which = rest.first().map(String::as_str).unwrap_or("all");
     let n = 700;
     let freqs: Vec<f64> = (0..n)
@@ -105,8 +116,18 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
         }
         let mut air = HumanAirway::new(96000.0, body);
         let k = body.scale;
-        let mut table: Vec<(String, Json)> = Vec::new();
+        // `--missing`: start from the entries already in the file and skip those vowels
+        let mut table: Vec<(String, Json)> = match (&results, missing_only) {
+            (Json::Obj(m), true) => match m.iter().find(|(k, _)| k == bname) {
+                Some((_, Json::Obj(old))) => old.clone(),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        };
         for vw in VOWELS {
+            if missing_only && table.iter().any(|(k, _)| k == vw.ipa) {
+                continue;
+            }
             let t = match bname {
                 "male" => vw.male,
                 "female" => vw.female,

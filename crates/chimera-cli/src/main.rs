@@ -29,7 +29,8 @@ usage: chimera <command> [args] [--float]
                  [--against earlier/score.json]  (score.json: distance to the singer, and the verdict)
   compare tsp    [tsp-dir] [outdir] [--speakers FA,MA,…] [--jobs n] [--dump]
                  [--against earlier/score.json]  (distance to 23 real speakers, phone by phone)
-  calibrate vowels     [male|female|child|all] [--out file]
+  calibrate vowels     [male|female|child|all] [--missing] [--out file]
+                       (--missing: fit only vowels the table lacks; existing entries stay untouched)
   calibrate consonants [--out file]
 
 Output names are stems (<out>.wav). --float writes 32-bit float WAVs instead of 16-bit PCM.
