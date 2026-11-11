@@ -46,13 +46,51 @@ fn round3(x: f64) -> f64 {
 const LO: [f64; 9] = [1.2, 5.0, 0.05, 0.12, 0.0, 0.0, -0.9, -1.3, 0.0];
 const HI: [f64; 9] = [4.6, 8.8, 2.3, 2.0, 1.4, 1.0, 0.9, 1.3, 1.0];
 
-fn to_artic(p: &[f64]) -> HumanArtic {
-    let (tb_x, tb_y, jaw, lip_ap, lip_prot, lip_width, root, larynx, curl) =
+/// What an apical vowel (ɿ after z c s, ʅ after zh ch sh r) fixes by construction instead of
+/// leaving to the formant fit: the lips (spread and open as for [i], never narrowed or protruded, which
+/// is how the fit once hit the formants without the tongue tip) and the tongue tip, held at the
+/// place of the consonant before it, opened just enough to be a vowel's constriction. The tongue
+/// body, jaw, root and larynx are fitted around that.
+struct Apical {
+    lip_ap: f64,
+    lip_prot: f64,
+    lip_width: f64,
+    tt_x: f64,
+    tt_y: f64,
+    curl: f64,
+}
+
+/// How far below its sibilant's calibrated constriction an apical vowel's tongue tip sits (the same
+/// coordinate as `calibrate consonants` sets, TtY). That constriction is ~0.15 cm² (the fricative's
+/// hiss); 0.11 lower it is ~0.3 cm², a vowel's (the fit's own floor is 0.22).
+const APICAL_OPENING: f64 = 0.11;
+
+/// The apical vowel `ipa`'s tip, curl and lips for a body: the tip is the place of the sibilant
+/// before it (s for ɿ, ʂ for ʅ), from the inventory with its calibrated TtY, and the lips are
+/// those of the body's [i] (its already-calibrated entry).
+fn apical(ipa: &str, bname: &str, i_lips: Option<[f64; 3]>) -> Option<Apical> {
+    let consonant = match ipa {
+        "ɿ" => "s",
+        "ʅ" => "ʂ",
+        _ => return None,
+    };
+    let c = chimera::phonetics::inventory::phoneme(consonant, bname.into())?.targets;
+    let [lip_ap, lip_prot, lip_width] = i_lips?;
+    Some(Apical { lip_ap, lip_prot, lip_width, tt_x: c.get(ArticKey::TtX)?, tt_y: c.get(ArticKey::TtY)? - APICAL_OPENING, curl: c.get(ArticKey::TtCurl).unwrap_or(0.0) })
+}
+
+fn to_artic(p: &[f64], fixed: Option<&Apical>) -> HumanArtic {
+    let (tb_x, tb_y, jaw, mut lip_ap, mut lip_prot, mut lip_width, root, larynx, mut curl) =
         (p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
+    if let Some(f) = fixed {
+        (lip_ap, lip_prot, lip_width, curl) = (f.lip_ap, f.lip_prot, f.lip_width, f.curl);
+    }
     let tip = rest_tip(jaw, tb_x, tb_y);
     // rhotic curl raises the tip toward the post-alveolar region
-    let tt_x = tip.x - 0.4 * curl;
-    let tt_y = tip.y + 2.0 * curl;
+    let (mut tt_x, mut tt_y) = (tip.x - 0.4 * curl, tip.y + 2.0 * curl);
+    if let Some(f) = fixed {
+        (tt_x, tt_y) = (f.tt_x, f.tt_y);
+    }
     HumanArtic {
         tb_x,
         tb_y,
@@ -106,6 +144,8 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
         let mut air = HumanAirway::new(96000.0, body);
         let k = body.scale;
         let mut table: Vec<(String, Json)> = Vec::new();
+        // [i]'s lips (aperture, protrusion, width) once calibrated, for the apical vowels
+        let mut i_lips: Option<[f64; 3]> = None;
         for vw in VOWELS {
             let t = match bname {
                 "male" => vw.male,
@@ -132,8 +172,20 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                 x0 = vec![2.6, 7.35, 0.25, 0.5, 0.1, 0.65, 0.4, 0.2, 0.0];
             }
             let jaw_prior = 0.2 + 1.5 * vw.height;
+            let pinned = apical(vw.ipa, bname, i_lips);
+            // the apical vowels' tongue body and jaw are held a little nearer the vowel-space guess
+            // (a close vowel, the tongue hardly leaving the consonant): with the tip and lips
+            // pinned the fit otherwise spent the jaw (1.4) and the body on the formants. 0.05 held
+            // them best but cost F2 +10% and F3 -10%; 0.01 keeps the formants within 11%.
+            let (w_body, w_jaw) = if pinned.is_some() { (0.01, 0.01) } else { (0.006, 0.004) };
             let mut cost = |p: &[f64]| -> f64 {
-                let a = to_artic(p);
+                let a = to_artic(p, pinned.as_ref());
+                // the apical vowels' fixed lips and curl, in the priors below too
+                let mut q = p.to_vec();
+                if let Some(f) = &pinned {
+                    (q[3], q[4], q[5], q[8]) = (f.lip_ap, f.lip_prot, f.lip_width, f.curl);
+                }
+                let p = &q[..];
                 let (f, min_area) = formants(&mut air, &freqs, &a);
                 if f.len() < 3 {
                     return 50.0;
@@ -148,7 +200,7 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                 if min_area < min_ok {
                     c += 0.4 * pow((min_ok - min_area) / min_ok, 2.0);
                 }
-                c += 0.004 * pow(p[2] - jaw_prior, 2.0);
+                c += w_jaw * pow(p[2] - jaw_prior, 2.0);
                 let open = vw.height > 0.6;
                 if vw.round {
                     let (w_max, p_min, ap_max) = (
@@ -169,7 +221,7 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                 // the tongue body near where the vowel's height and backness put it: many postures
                 // give the same formants, and without this the fit wandered (a schwa with the
                 // tongue as low as /ɑ/), making every transition through it needlessly long
-                c += 0.006 * (pow(p[0] - x0[0], 2.0) + pow(p[1] - x0[1], 2.0));
+                c += w_body * (pow(p[0] - x0[0], 2.0) + pow(p[1] - x0[1], 2.0));
                 if !matches!(vw.ipa, "ɝ" | "ʅ") {
                     c += 0.5 * p[8] * p[8];
                 }
@@ -198,7 +250,10 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
                     best = nb;
                 }
             }
-            let a = to_artic(&best.x);
+            let a = to_artic(&best.x, pinned.as_ref());
+            if vw.ipa == "i" {
+                i_lips = Some([a.lip_ap, a.lip_prot, a.lip_width]);
+            }
             let (f, _) = formants(&mut air, &freqs, &a);
             let err: Vec<f64> = (0..3)
                 .map(|i| match f.get(i) {
