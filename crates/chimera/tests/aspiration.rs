@@ -36,7 +36,7 @@ fn the_front_end_overrides_the_english_rule() {
 #[test]
 fn sung_onsets_keep_the_flag() {
     let syl = |aspirated| Syllable { text: "pa".into(), onset: vec![Segment { aspirated, ..Segment::new("p") }], nucleus: Segment::new("a"), coda: vec![], melisma: None, word_end: true, phrase_end: false, ..Default::default() };
-    let sing = |aspirated| aspiration(&plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: syl(aspirated) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0 }).gestures);
+    let sing = |aspirated| aspiration(&plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: syl(aspirated) }], &SongOptions { body: "male".into(), bpm: 90.0, t0: 0.5, vibrato: 0.0, ..Default::default() }).gestures);
     assert_eq!(sing(None), 0.36);
     assert_eq!(sing(Some(false)), 0.22);
 }

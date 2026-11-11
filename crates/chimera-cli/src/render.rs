@@ -287,6 +287,7 @@ pub fn song(ctx: &Ctx, a: &[String]) -> Result<(), String> {
                 bpm: song.bpm,
                 t0: 0.3,
                 vibrato: 35.0,
+                ..Default::default()
             },
         );
         v.schedule(&plan.gestures);
@@ -520,7 +521,8 @@ fn render_tracked(v: &mut HumanVoice, out: &mut [f32], artic: bool, tele: bool) 
 /// sync; `--tele` writes the voice's whole telemetry over time (see `TeleRecorder`), which the
 /// app's duet page replays on a 3D head. The melody file may give `"syllables"` (IPA
 /// onset/nucleus/coda per sounding note, optional `"pitch"` bends) instead of `"lyrics"`: a
-/// language front end's output (docs/language-front-ends.md).
+/// language front end's output (docs/language-front-ends.md). Optional sing-planner setting:
+/// `"bendStrength"` (0, the default: the melody as written; 1: the front end's tone bends drawn).
 pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let mut artic_out: Option<String> = None;
     let mut tele_out: Option<String> = None;
@@ -575,7 +577,7 @@ pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
         if phrase.is_empty() {
             return;
         }
-        let plan = plan_song(phrase, &SongOptions { body: body_name.into(), bpm, t0: start, vibrato });
+        let plan = plan_song(phrase, &SongOptions { body: body_name.into(), bpm, t0: start, vibrato, bend_strength: j["bendStrength"].as_f64() });
         v.schedule(&plan.gestures);
         *end = js_max(*end, plan.end);
         phrase.clear();
