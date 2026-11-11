@@ -71,8 +71,6 @@ export function ensureDictionary(): void {
     .load()
     .then(() => {
       const s = useSing.getState();
-      // a song that brings its own syllables (another language's front end) is not re-read as English
-      if (DEMO_SONGS.some((d) => d.syllables && d.lyrics === s.lyrics)) return;
       const syllables = lyricsToSyllables(s.lyrics);
       useSing.setState({ syllables, cursor: Math.min(s.cursor, Math.max(0, syllables.length - 1)) });
     })
@@ -271,7 +269,7 @@ export async function playDemo(name: string, body: BodyMix, ready?: () => Promis
     // letter-to-sound rules
   }
   if (token !== demoToken) return;
-  const syl = song.syllables ?? lyricsToSyllables(song.lyrics);
+  const syl = lyricsToSyllables(song.lyrics);
   if (!syl.length) return;
   const shift = song.octave[nearestBody(body)] * 12;
   const notes = song.notes.map((n, i) => ({ midi: n[0] + shift, beats: n[1], syl: syl[i % syl.length] }));
