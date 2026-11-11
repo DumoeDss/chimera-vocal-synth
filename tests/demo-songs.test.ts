@@ -29,3 +29,10 @@ test("a melisma mark is a note that holds the vowel before it", () => {
     for (const [i, x] of syl.entries()) if (x.melisma) expect(x.nucleus.ipa).toBe(syl[i - 1]!.nucleus.ipa);
   }
 });
+
+test("phrases end at the tune's line ends, on a melisma chain's last note", () => {
+  const ends = (name: string) => lyricsToSyllables(DEMO_SONGS.find((d) => d.name === name)!.lyrics).flatMap((x, i) => (x.phraseEnd ? [i] : []));
+  expect(ends("さくら さくら")).toEqual([5, 13, 21, 29, 37, 43, 49]);
+  expect(ends("两只老虎")).toEqual([3, 7, 10, 13, 19, 25, 28, 31]);
+  expect(ends("아리랑")).toEqual([17, 31]); // 요 and its three ~ notes, then the end
+});
