@@ -12,6 +12,7 @@ use chimera::phonetics::beatbox::{self, BeatStep};
 use chimera::phonetics::planner::{self, PhraseInput, PlanOptions};
 use chimera::phonetics::sing::{self, MelismaOptions, NoteOnOptions, SongOptions, SungNote};
 use chimera::phonetics::english::EnglishG2P;
+use chimera::phonetics::ipa_lyrics::{IpaLyrics, sung_symbols};
 use chimera::phonetics::japanese::Japanese;
 use chimera::phonetics::korean::Korean;
 use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin};
@@ -123,6 +124,8 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
             Ok(json!({ "freqs": freqs, "db": db, "formants": formants }))
         }
         // ---------------------------------------------------------------- text → phonemes
+        // the IPA symbols the engine can sing (tools that convert other IPA to it read this)
+        "ipaSymbols" => to_json(&sung_symbols()),
         "tokenizeIpa" => to_json(&ipa::tokenize_ipa(&arg::<String>(req, "text")?)),
         "g2pLoad" => {
             st.g2p.load_dict(&arg::<String>(req, "text")?);
@@ -134,8 +137,8 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
             st.mandarin.load(&arg::<String>(req, "text")?);
             Ok(json!(true))
         }
-        // every built-in front end: pinyin, English, Korean, Japanese, and Mandarin once its lexicon is loaded
-        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&Pinyin, &English(&st.g2p), &Korean, &Japanese, &Mandarin(&st.mandarin)])),
+        // every built-in front end: pinyin, English, Korean, Japanese, IPA words between slashes, and Mandarin once its lexicon is loaded
+        "lyricsToSyllables" => to_json(&read_lyrics(&arg::<String>(req, "text")?, &[&Pinyin, &English(&st.g2p), &Korean, &Japanese, &IpaLyrics, &Mandarin(&st.mandarin)])),
         // ---------------------------------------------------------------- creatures
         "creaturePreview" => {
             let id: String = arg(req, "id")?;

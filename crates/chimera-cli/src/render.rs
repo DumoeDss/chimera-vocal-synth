@@ -22,6 +22,7 @@ use chimera::phonetics::sing::{
     plan_song,
 };
 use chimera::phonetics::songs::DEMO_SONGS;
+use chimera::phonetics::ipa_lyrics::{IpaLyrics, ipa_lyric_report};
 use chimera::phonetics::japanese::Japanese;
 use chimera::phonetics::korean::Korean;
 use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin, is_han};
@@ -66,7 +67,11 @@ pub fn zh() -> Result<MandarinLexicon, String> {
 pub fn sung_lyrics(text: &str) -> Result<Vec<Syllable>, String> {
     let g = g2p()?;
     let lex = if text.chars().any(is_han) { zh()? } else { MandarinLexicon::new() };
-    Ok(read_lyrics(text, &[&Pinyin, &English(&g), &Korean, &Japanese, &Mandarin(&lex)]))
+    // IPA words the engine can't sing as written are said on stderr (stdout stays the syllables)
+    for w in ipa_lyric_report(text).warnings() {
+        eprintln!("warning: {w}");
+    }
+    Ok(read_lyrics(text, &[&Pinyin, &English(&g), &Korean, &Japanese, &IpaLyrics, &Mandarin(&lex)]))
 }
 
 /// `name.toLowerCase().replace(/[^a-z]+/g, "-")`

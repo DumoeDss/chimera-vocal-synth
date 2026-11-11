@@ -61,6 +61,11 @@ export function tokenizeIpa(text: string): Segment[] {
   return call("tokenizeIpa", { text });
 }
 
+/** The IPA symbols the engine can sing: what IPA lyrics may use (a converter maps other IPA onto these). */
+export function ipaSymbols(): string[] {
+  return call("ipaSymbols", {});
+}
+
 /**
  * English text → phonemes: CMUdict once loaded (fetched and gunzipped here, parsed by the
  * engine), letter-to-sound rules until then. One dictionary per page (the engine keeps it).
@@ -144,7 +149,7 @@ export class MandarinLexicon {
   }
 }
 
-/** Lyrics → sung syllables through the built-in front ends: English (the page's dictionary, see EnglishG2P), Korean, and Mandarin once its lexicon is loaded. */
+/** Lyrics → sung syllables through the built-in front ends: English (the page's dictionary, see EnglishG2P), Korean, Japanese, IPA words between slashes, and Mandarin once its lexicon is loaded. */
 export function lyricsToSyllables(text: string): Syllable[] {
   return call("lyricsToSyllables", { text });
 }
