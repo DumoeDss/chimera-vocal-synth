@@ -41,6 +41,10 @@ pub struct Segment {
     /// a vowel said with the velum lowered (IPA combining tilde); None or false: oral
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nasalized: Option<bool>,
+    /// a consonant made with a second, palatal gesture: the tongue body raised and fronted toward
+    /// the palate (IPA ʲ); None or false: plain
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub palatalized: Option<bool>,
 }
 
 impl Segment {
