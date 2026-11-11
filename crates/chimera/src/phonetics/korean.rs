@@ -2,7 +2,9 @@
 //! note. The block keeps its spelling as the note's text; its sounds follow standard Seoul
 //! pronunciation inside a word: a coda moves onto a following silent ㅇ (먹어 → 머거), codas
 //! neutralise to seven sounds, obstruents nasalise before nasals (국물 → 궁물), ㄴ/ㄹ meet as [ll],
-//! ㅎ aspirates its neighbour (좋다 → 조타), and obstruents tense after an obstruent coda.
+//! ㅎ aspirates its neighbour (좋다 → 조타) or drops before a vowel and lets the consonant before it
+//! move over (싫어 → 시러), ㄷ ㅌ palatalise before 이 (같이 → 가치), and obstruents tense after an
+//! obstruent coda.
 //!
 //! Stops say their own aspiration (Segment::aspirated): aspirated ㅋ ㅌ ㅍ ㅊ are aspirated, and
 //! tense ㄲ ㄸ ㅃ ㅉ are voiceless and unaspirated (the engine has no stiff "fortis" phonation yet).
@@ -98,14 +100,21 @@ fn tense(c: char) -> char {
 
 /// Apply the sound rules at the boundary between block `a` and the next block `b`.
 fn join(a: &mut Block, b: &mut Block) {
-    // a coda before a silent ㅇ moves over (ㅎ drops, ㅇ stays: 좋아 → 조아, 빵야 → 빵야)
+    // a coda before a silent ㅇ moves over (ㅎ drops, ㅇ stays: 좋아 → 조아, 빵야 → 빵야); after a
+    // dropped ㅎ the consonant before it moves (싫어 → 시러, 많아 → 마나), and ㄷ ㅌ moving onto
+    // 이 palatalise (굳이 → 구지, 같이 → 가치)
     if b.onset.is_none() {
-        match a.coda.last() {
-            Some('ㅎ') => {
-                a.coda.pop();
-            }
-            Some('ㅇ') | None => {}
-            Some(_) => b.onset = a.coda.pop(),
+        if a.coda.last() == Some(&'ㅎ') {
+            a.coda.pop();
+        }
+        if a.coda.last().is_some_and(|&c| c != 'ㅇ') {
+            let c = a.coda.pop().unwrap();
+            let before_i = b.vowel == "i" && b.glide.is_empty();
+            b.onset = Some(match c {
+                'ㄷ' if before_i => 'ㅈ',
+                'ㅌ' if before_i => 'ㅊ',
+                _ => c,
+            });
         }
         return;
     }
@@ -115,6 +124,8 @@ fn join(a: &mut Block, b: &mut Block) {
         let o = b.onset.unwrap();
         b.onset = Some(match o {
             'ㅅ' => 'ㅆ',
+            // ㄶ and ㅎ read [nn] before ㄴ (않는 → 안는, 놓는 → 논는); ㅀ reads [ll] (싫니 → 실리)
+            'ㄴ' if a.coda == ['ㄹ'] => 'ㄹ',
             'ㄴ' => {
                 a.coda = vec!['ㄴ'];
                 'ㄴ'

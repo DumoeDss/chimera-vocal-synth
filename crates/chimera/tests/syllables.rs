@@ -89,6 +89,15 @@ fn hangul_sings_one_syllable_per_block_with_korean_sound_rules() {
     assert_eq!(sung("사랑해"), "sa.ɾaŋ.ɦɛ");
     assert_eq!(sung("닭"), "tʰ45ak");
     assert_eq!(sung("의사"), "ɰi.sa");
+    // after a dropped ㅎ the consonant before it moves onto the silent ㅇ
+    assert_eq!(sung("싫어"), "ɕi.ɾʌ"); // [시러]
+    assert_eq!(sung("많아"), "ma.na"); // [마나]
+    assert_eq!(sung("괜찮아"), "kʰ45wɛn.tɕʰ90a.na"); // [괜차나]
+    assert_eq!(sung("싫니"), "ɕil.li"); // ㅀ before ㄴ: [실리]
+    assert_eq!(sung("않는"), "an.nɯn"); // ㄶ before ㄴ: [안는]
+    // ㄷ ㅌ before 이 palatalise
+    assert_eq!(sung("같이"), "kʰ45a.tɕʰ90i"); // [가치]
+    assert_eq!(sung("굳이"), "kʰ45u.dʑi"); // [구지]
 }
 
 #[test]
