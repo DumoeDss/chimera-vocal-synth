@@ -87,6 +87,17 @@ fn calibrate_consonants_reproduces_the_committed_table() {
     );
 }
 
+/// `--missing` fits only the vowels the table lacks and leaves every other entry as it was, byte
+/// for byte: with nothing missing it rewrites the file unchanged.
+#[test]
+fn calibrate_vowels_missing_changes_nothing_when_nothing_is_missing() {
+    let committed = std::fs::read_to_string(format!("{PHONETICS}/vowelTargets.generated.json")).unwrap();
+    let out = tmp("vowelTargets-missing.json");
+    std::fs::write(&out, &committed).unwrap();
+    chimera(&["calibrate", "vowels", "all", "--missing", "--out", &out]);
+    assert!(std::fs::read_to_string(&out).unwrap() == committed, "nothing missing: the file must not change");
+}
+
 /// About 100 s in release. Not byte-identical: the Nelder–Mead fit runs 1 800 + 2 × 1 000
 /// iterations on a flat minimum, which amplifies last-ulp differences between V8's libm and Rust's
 /// (in the airway geometry and the transfer function) into ~1e-4 changes of the fitted posture.
