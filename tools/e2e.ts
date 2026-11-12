@@ -127,7 +127,7 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   const noticeText = async () => ((await notice.textContent()) ?? "").trim();
   if ((await notice.getAttribute("aria-live")) !== "polite") errors.push(`[${tag}] the skipped-symbols notice is not a polite live region`);
   if (await noticeText()) errors.push(`[${tag}] the skipped-symbols notice shows with IPA mode off: ${await noticeText()}`);
-  await page.getByLabel("Text is IPA").check();
+  await ipaChip.click(); // IPA mode on (a toggle button)
   await box_.fill("ɕiɛ˥˩");
   const shown = await noticeText();
   logs.push(`[${tag}] skipped-symbols notice: ${shown}`);
@@ -139,7 +139,7 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   await box_.fill("");
   if (await noticeText()) errors.push(`[${tag}] clearing the box left the notice: ${await noticeText()}`);
   await box_.fill("ɕiɛ˥˩");
-  await page.getByLabel("Text is IPA").uncheck();
+  await ipaChip.click(); // and off
   if (await noticeText()) errors.push(`[${tag}] turning IPA mode off left the notice: ${await noticeText()}`);
   // sing mode: a key sings the marked syllable and moves the cursor; legato; a demo song
   await page.getByRole("radio", { name: "Sing" }).click();
