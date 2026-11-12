@@ -8,9 +8,9 @@ import { airwayModel, dropAirwayModel, airwayFrame, airwayAreas, airwayTransfer,
 import { bodyWeights, type BodyMix } from "./body.ts";
 
 /** Mandarin-only vowels, which the planner sings but the vowel space leaves out: the apical vowels ɿ ʅ
- *  (a consonant's tongue held open, not a point among the vowels) and the retracted u̠ (Beijing back u,
- *  F2 ~660 Hz), which would sit on top of the English u the map is drawn for. */
-const NOT_ON_THE_MAP = new Set(["ɿ", "ʅ", "u̠"]);
+ *  (a consonant's tongue held open, not a point among the vowels) and the retracted u̠ ʊ̠ (Beijing back u and ong, F2 ~660 and
+ *  ~730 Hz), which would sit on top of the English u ʊ the map is drawn for. */
+const NOT_ON_THE_MAP = new Set(["ɿ", "ʅ", "u̠", "ʊ̠"]);
 
 export interface VowelPoint {
   ipa: string;

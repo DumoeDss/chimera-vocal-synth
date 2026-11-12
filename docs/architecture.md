@@ -175,7 +175,7 @@ and the commit history actually cite, and says where they cite nothing.
   load. The code names Flanagan but no publication.
 - **Vowel targets** (`phonetics/vowel_data.rs`, `chimera calibrate`): the English vowels are
   calibrated to the men's, women's and children's means of Hillenbrand, Getty, Clark & Wheeler
-  (1995). Mandarin's back u `u̠` is calibrated to the means of Zee & Lee (2001), "An acoustical
+  (1995). Mandarin's back u `u̠` and ong `ʊ̠` are calibrated to the means of Zee & Lee (2001), "An acoustical
   analysis of the vowels in Beijing Mandarin", Eurospeech 2001, doi 10.21437/Eurospeech.2001-169
   (10 men and 10 women, 5 repetitions each, LPC at the vowel's midpoint). The other vowels use
   "typical literature values" whose source isn't recorded.
