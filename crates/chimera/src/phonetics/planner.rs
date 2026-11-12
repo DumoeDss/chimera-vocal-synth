@@ -75,6 +75,12 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
         "u̠ə" => &["u̠", "ə"],
         "u̠aɪ" => &["u̠", "a", "ɪ"],
         "u̠eɪ" => &["u̠", "e", "i"],
+        // and Mandarin's ʊ (ong, and the off-glide of ao ou iao iou, Zee & Lee: F2 ~730 where English /ʊ/ has ~1120)
+        "iʊ̠" => &["i", "ʊ̠"],
+        "aʊ̠" => &["a", "ʊ̠"],
+        "əʊ̠" => &["ə", "ʊ̠"],
+        "iaʊ̠" => &["i", "a", "ʊ̠"],
+        "iəʊ̠" => &["i", "ə", "ʊ̠"],
         // a central start, Mandarin's ou ([əʊ], where English [oʊ] starts nearly at [u])
         "əʊ" => &["ə", "ʊ"],
         // triphthongs: a glide into a falling diphthong (Mandarin iao, iou, uai, uei)
@@ -88,7 +94,7 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
 
 /// A rising nucleus (a rising diphthong or a triphthong): its first part is a short glide.
 pub fn is_rising(ipa: &str) -> bool {
-    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "əɝ" | "aɝ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ" | "u̠a" | "u̠ɔ" | "u̠ɑ" | "u̠ə" | "u̠aɪ" | "u̠eɪ")
+    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "əɝ" | "aɝ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ" | "u̠a" | "u̠ɔ" | "u̠ɑ" | "u̠ə" | "u̠aɪ" | "u̠eɪ" | "iʊ̠" | "iaʊ̠" | "iəʊ̠")
 }
 
 /// A rising nucleus's on-glide (its first part), sung short at the note's start.

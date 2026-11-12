@@ -121,7 +121,7 @@ fn the_medial_is_still_there_against_the_same_syllable_without_it() {
 
 #[test]
 fn triphthongs_keep_their_off_glide() {
-    for (p, off) in [("guai4", "ɪ"), ("kuai4", "ɪ"), ("you3", "ʊ")] {
+    for (p, off) in [("guai4", "ɪ"), ("kuai4", "ɪ"), ("you3", "ʊ̠")] {
         let t = sing(&py(p));
         let v: Vec<&str> = t.vowels.iter().map(|x| x.0.as_str()).collect();
         assert_eq!(v.len(), 3, "{p}: glide, held vowel, off-glide: {v:?}");

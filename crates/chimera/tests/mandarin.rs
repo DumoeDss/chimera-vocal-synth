@@ -62,7 +62,7 @@ fn pinyin_becomes_ipa_with_aspiration_said() {
     let all: Vec<String> = syls("跑不吃学绿的爱").iter().map(ipa).collect();
     // p aspirated, b unaspirated; ch aspirated before an apical vowel; xue = ɕ ɥ ɛ; lü; neutral de; ai
     // apical ʅ after ch; xue's glide sings inside the vowel (yɛ); 爱 starts with a glottal catch
-    assert_eq!(all, ["pʰaʊ", "p˭u̠", "tʂʰʅ", "ɕyɛ", "ly", "t˭ə", "ʔaɪ"]);
+    assert_eq!(all, ["pʰaʊ̠", "p˭u̠", "tʂʰʅ", "ɕyɛ", "ly", "t˭ə", "ʔaɪ"]);
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn pinyin_with_tones_is_mandarin_and_without_is_english() {
     let text: Vec<&str> = t.iter().map(|x| x.0.as_str()).collect();
     assert_eq!(text, ["nǐ", "hǎo", "xiè", "xie", "ni3", "hao3", "de5", "xī", "ān", "nǚ"]);
     let ipa: Vec<&str> = t.iter().map(|x| x.1.as_str()).collect();
-    assert_eq!(ipa, ["ni", "xaʊ", "ɕiɛ", "ɕiɛ", "ni", "xaʊ", "t˭ə", "ɕi", "ʔan", "ny"]);
+    assert_eq!(ipa, ["ni", "xaʊ̠", "ɕiɛ", "ɕiɛ", "ni", "xaʊ̠", "t˭ə", "ɕi", "ʔan", "ny"]);
     // nǐhǎo is one word: third-tone sandhi sings nǐ rising (one bend); "ni3 hao3" are two words
     assert_eq!(t[0].2, tone_bends(2).len());
     assert_eq!(t[4].2, tone_bends(3).len());
@@ -155,7 +155,7 @@ fn mandarin_timing_and_vowels() {
     assert_eq!(s[2].onset[0].dur, Some(0.09));
     assert_eq!(s[3].onset[0].dur, Some(0.13));
     assert_eq!(s[4].onset[0].dur, Some(0.08));
-    // Mandarin's own vowels: eng back [ɤŋ], uo open [u̠ɔ], ou central [əʊ], iao one three-part nucleus
+    // Mandarin's own vowels: eng back [ɤŋ], uo open [u̠ɔ], ou central [əʊ̠], iao one three-part nucleus
     let n: Vec<String> = syls("风多头鸟").iter().map(|s| s.nucleus.ipa.clone()).collect();
-    assert_eq!(n, ["ɤ", "u̠ɔ", "əʊ", "iaʊ"]);
+    assert_eq!(n, ["ɤ", "u̠ɔ", "əʊ̠", "iaʊ̠"]);
 }

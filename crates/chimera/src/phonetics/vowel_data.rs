@@ -79,4 +79,9 @@ pub static VOWELS: &[VowelRef] = &[
     // fit starts from the male solution (calibrate.rs `start_from`; from the generic guess it settled at
     // jaw 1.8, F2 +11 %). The child's F2 is +7 %.
     vref("u̠", "Mandarin wu, hu (back u)", [345.0, 661.0, 2783.0], Some([345.0, 759.0, 3309.0]), None, true, 0.0, 1.0),
+    // ʊ̠ is the vowel of ong / iong and the off-glide of ao ou iao iou (the table's "u before ŋ": Zee & Lee's
+    // men 441 / 730 / 2881, women 533 / 945 / 3314; English /ʊ/ "hood" has F2 1122 / 1225). It achieves
+    // (F1 / F2 / F3 Hz): male 422 / 765 / 2345, female 513 / 972 / 2859, child 555 / 1004 / 3360: F1 and F2 within
+    // 5 % on every body (F3, weighted least in the fit, -14 to -19 % for the adults).
+    vref("ʊ̠", "Mandarin ong (back ʊ)", [441.0, 730.0, 2881.0], Some([533.0, 945.0, 3314.0]), None, true, 0.2, 1.0),
 ];

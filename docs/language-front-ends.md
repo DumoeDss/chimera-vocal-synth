@@ -60,6 +60,11 @@ protrusion at its upper), and the key can't be typed in IPA lyrics (the tokenize
 nuclei with that glide are `u̠a u̠ɔ u̠ɑ u̠ə` and the triphthongs `u̠aɪ u̠eɪ`, beside the plain `ua uɔ uɑ uə uaɪ ueɪ`
 (those keep English's u). `tests/mandarin_u.rs`.
 
+Mandarin's ong (东 dong, 中 zhong, 兄 xiong) is `ʊ̠` (ʊ + U+0320), Zee & Lee's "u before ŋ" (men 441 / 730 Hz
+F1 / F2, women 533 / 945) rather than English /ʊ/ "hood" (F2 ~1120). It is also the off-glide of ao and ou
+(the nuclei `aʊ̠`, `əʊ̠`) and of iao, iou and iong (`iaʊ̠`, `iəʊ̠`, `iʊ̠`); ou's central ə start is as it was.
+The fit reaches F1 and F2 within 5 % on every body (`vowel_data.rs`). `tests/mandarin_ong.rs`.
+
 Both Mandarin front ends sing erhua as one syllable ending in ɻ: 一点儿 is 一 + 点儿 (pinyin
 `yìdiǎnr`), 哪儿 is `nǎr`. A 儿 that is a word's own syllable (女儿, 儿子) stays a syllable.
 
