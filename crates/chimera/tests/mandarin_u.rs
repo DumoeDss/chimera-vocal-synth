@@ -50,7 +50,8 @@ const BEAT_AT: f64 = 0.5;
 
 /// F2 (Hz) of a sung one-beat note at 90 bpm, a median over LPC frames of 40 ms in the held vowel
 fn sung_f2(syl: Syllable, body: HumanBody, name: &str, fs: f64) -> f64 {
-    let (midi, f0) = if name == "male" { (50.0, 110.0) } else { (62.0, 220.0) };
+    // 110 Hz on every body: at a woman's 220 Hz the harmonics are too sparse for LPC to place F1 and F2 well
+    let (midi, f0) = (50.0, 110.0);
     let plan = plan_song(&[SungNote { midi, beats: 1.0, syl }], &SongOptions { body: name.into(), bpm: 90.0, t0: BEAT_AT, vibrato: 0.0, ..Default::default() });
     let mut v = HumanVoice::new(fs, body, oversample_for(fs));
     v.set_source(&SourcePatch::f0(f0));
