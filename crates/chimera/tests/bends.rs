@@ -23,8 +23,8 @@ fn bends_colour_the_start_or_end_of_the_note_and_none_leave_it() {
     let hz = midi_to_hz(57.0);
     let one = |pitch| plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("l", "a", &[], pitch) }], &opts(None));
     assert!(labelled(&one(vec![]).gestures, "bend").is_empty());
-    let up = Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -2.0 };
-    let down = Bend { at: Edge::End, len: 0.35, max: 0.15, st: -3.0 };
+    let up = Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -2.0, to: None };
+    let down = Bend { at: Edge::End, len: 0.35, max: 0.15, st: -3.0, to: None };
     let p = one(vec![up, down]);
     let b = labelled(&p.gestures, "bend");
     assert_eq!(b.len(), 2);
@@ -37,7 +37,7 @@ fn bends_colour_the_start_or_end_of_the_note_and_none_leave_it() {
 
 #[test]
 fn a_melisma_keeps_its_written_pitches() {
-    let bend = vec![Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -2.0 }];
+    let bend = vec![Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -2.0, to: None }];
     let first = syl("l", "a", &[], bend.clone());
     let cont = Syllable { text: "~".into(), nucleus: Segment::new("a"), melisma: Some(true), pitch: bend, ..Default::default() };
     let p = plan_song(&[SungNote { midi: 57.0, beats: 1.0, syl: first }, SungNote { midi: 59.0, beats: 1.0, syl: cont }], &opts(None));
@@ -69,7 +69,7 @@ fn a_syllable_can_ask_for_its_own_breath() {
 fn a_start_bend_begins_in_the_onset() {
     // a rising tone starts low: the onset consonant already sings the bend's pitch, not the note's
     let hz = midi_to_hz(57.0);
-    let up = Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -3.0 };
+    let up = Bend { at: Edge::Start, len: 0.35, max: 0.15, st: -3.0, to: None };
     let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("m", "a", &[], vec![up]) }], &opts(None));
     let onset_f0: Vec<f64> = p.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).collect();
     assert!(!onset_f0.is_empty());
@@ -96,7 +96,7 @@ fn before_ng_after_a_back_vowel_the_tongue_rises_toward_the_velum() {
 
 /// a Mandarin 2nd and 4th tone's bends, as the front end writes them
 fn tone_syl() -> Syllable {
-    syl("m", "a", &[], vec![Bend { at: Edge::Start, len: 0.45, max: 0.25, st: -3.5 }, Bend { at: Edge::End, len: 0.4, max: 0.2, st: -4.0 }])
+    syl("m", "a", &[], vec![Bend { at: Edge::Start, len: 0.45, max: 0.25, st: -3.5, to: None }, Bend { at: Edge::End, len: 0.4, max: 0.2, st: -4.0, to: None }])
 }
 
 fn plan_with(strength: Option<f64>, syl: Syllable) -> chimera::phonetics::Plan {

@@ -215,6 +215,8 @@ export interface Bend {
   len: number;
   max: number;
   st: number;
+  /** the pitch moves from `st` to this many semitones across the bend (a lexical tone's contour); unset: it holds `st` */
+  to?: number;
 }
 
 /** Optional sing-planner settings: nasalised vowels before a nasal coda, sung consonant length, tone bends. */

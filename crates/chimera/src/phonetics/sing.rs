@@ -19,7 +19,7 @@ use crate::anatomy::human::{ArticKey, BodyMix};
 use super::planner::{PlanOptions, held_vowel, offglide, onglide, plan_utterance, vowel_artic};
 use super::{Bend, Edge, Intonation, Plan, PlannedSegment, Segment, Syllable};
 use crate::control::score::{ControlKey, Gesture, Targets};
-use crate::math::{js_max, js_min};
+use crate::math::{js_max, js_min, js_round};
 use serde::{Deserialize, Serialize};
 
 /// `440 · 2^((m − 69)/12)`, the same formula and operation order as `sing.ts`.
@@ -159,20 +159,52 @@ pub struct SongOptions {
 /// A bend's blending strength against the note's own pitch (6): it wins while it lasts.
 const BEND_STRENGTH: f64 = 30.0;
 
-/// Pitch gestures for a syllable's bends on a vowel sung at `hz` from a to b.
-fn bend_gestures(bends: &[Bend], hz: f64, a: f64, b: f64, out: &mut Vec<Gesture>) {
+/// A moving bend (`Bend::to`) against the note's own pitch: at 120 the contour is drawn to 95 %
+/// (a held bend's 30 gives 83 %, which is part of how those were tuned).
+const GLIDE_STRENGTH: f64 = 120.0;
+/// A moving bend is drawn through knots this far apart at most (s), each a pitch target that fades
+/// into the next (their cosine ramps sum to one), and through at most this many steps.
+const GLIDE_STEP: f64 = 0.05;
+const GLIDE_STEPS: f64 = 8.0;
+
+/// Pitch gestures for a syllable's bends on a vowel sung at `hz` from a to b. `voiced_end` is where
+/// the syllable's voiced rhyme ends (b, or the end of a nasal coda): moving bends are measured to
+/// it. `last`: the phrase ends here, so a moving bend's last pitch holds while the voice fades
+/// (falling back to the note there, a fourth tone ended in an upward flick).
+fn bend_gestures(bends: &[Bend], hz: f64, a: f64, b: f64, voiced_end: f64, last: bool, out: &mut Vec<Gesture>) {
     let d = b - a;
     if d <= 0.02 {
         return;
     }
+    let at = |st: f64| Targets::default().with(ControlKey::F0, hz * crate::math::pow(2.0, st / 12.0));
     for bend in bends {
-        let len = js_min(bend.len * d, bend.max);
-        let (t0, t1) = match bend.at {
-            Edge::Start => (a - 0.03, a + len),
-            Edge::End => (b - len, b + 0.02),
+        let Some(to) = bend.to else {
+            let len = js_min(bend.len * d, bend.max);
+            let (t0, t1) = match bend.at {
+                Edge::Start => (a - 0.03, a + len),
+                Edge::End => (b - len, b + 0.02),
+            };
+            out.push(Gesture::new(t0, t1, 0.015, 0.04, BEND_STRENGTH, at(bend.st)).label("bend"));
+            continue;
         };
-        let f = hz * crate::math::pow(2.0, bend.st / 12.0);
-        out.push(Gesture::new(t0, t1, 0.015, 0.04, BEND_STRENGTH, Targets::default().with(ControlKey::F0, f)).label("bend"));
+        let len = js_min(bend.len * (voiced_end - a), bend.max);
+        let t0 = match bend.at {
+            Edge::Start => a,
+            Edge::End => voiced_end - len,
+        };
+        let n = js_max(1.0, js_min(GLIDE_STEPS, js_round(len / GLIDE_STEP + 0.499)));
+        let w = len / n;
+        let mut i = 0.0;
+        while i <= n {
+            let t = t0 + i * w;
+            // the first knot of a start bend reaches back into the onset, which already sings it;
+            // the last knot of the phrase's last syllable holds through the fade
+            let from = if i == 0.0 && bend.at == Edge::Start { t - 0.03 } else { t };
+            let hold = i == n && bend.at == Edge::End && last;
+            let until = if hold { t + 0.15 } else { t };
+            out.push(Gesture::new(from, until, w, if hold { 0.05 } else { w }, GLIDE_STRENGTH, at(bend.st + (to - bend.st) * i / n)).label("bend"));
+            i += 1.0;
+        }
     }
 }
 
@@ -201,7 +233,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         let mut segs: Vec<Segment> = Vec::new();
         let mut vowel_spans: Vec<(f64, f64)> = Vec::new();
         // (note, vowel start, vowel end) of syllables with bends, and of vowels before a nasal coda
-        let mut bend_spans: Vec<(usize, f64, f64)> = Vec::new();
+        let mut bend_spans: Vec<(usize, f64, f64, f64)> = Vec::new();
         let mut nasal_spans: Vec<(f64, f64, f64, &str)> = Vec::new();
         // (vowel start, vowel end, fraction nasalised, the tongue body's approach to the coda) of
         // closing rhymes
@@ -294,11 +326,13 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             if let Some(b) = last_of_chain(notes, k).breath {
                 breath_spans.push((times[k], times[k] + vdur, b));
             }
+            // a nasal coda is voiced: it carries the end of a tone's contour
+            let voiced_end = times[k] + vdur + if coda.first().is_some_and(|c| matches!(c.ipa.as_str(), "m" | "n" | "ŋ")) { total(&coda) } else { 0.0 };
             segs.extend(coda);
             vowel_spans.push((times[k], times[k] + vdur));
             // bends shape their syllable's first note (a melisma continues at the written pitches)
             if strength > 0.0 && !n.syl.pitch.is_empty() && !melisma(&n.syl) {
-                bend_spans.push((k, times[k], times[k] + vdur));
+                bend_spans.push((k, times[k], times[k] + vdur, voiced_end));
             }
         }
         if !segs.is_empty() {
@@ -306,9 +340,9 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let plan = plan_utterance(&segs, &PlanOptions { body: o.body, t0: times[i] - first_onset - 0.06, f0: Some(hz_of(i)), intonation: Some(Intonation::Flat), sung: Some(true), ..Default::default() });
             gestures.extend_from_slice(&plan.gestures);
             segments.extend(plan.segments);
-            for &(k, a, b) in &bend_spans {
-                let bends: Vec<Bend> = notes[k].syl.pitch.iter().map(|x| Bend { st: x.st * strength, ..*x }).collect();
-                bend_gestures(&bends, hz_of(k), a, b, &mut gestures);
+            for &(k, a, b, voiced_end) in &bend_spans {
+                let bends: Vec<Bend> = notes[k].syl.pitch.iter().map(|x| Bend { st: x.st * strength, to: x.to.map(|t| t * strength), ..*x }).collect();
+                bend_gestures(&bends, hz_of(k), a, b, voiced_end, k == j, &mut gestures);
             }
             for &(a, b, lead, place) in &nasal_spans {
                 let t0 = b - js_min(lead * (b - a), 0.25);

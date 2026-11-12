@@ -149,7 +149,11 @@ pub enum Edge {
 
 /// A bend of the pitch inside a sung note: `st` semitones from the note, at the vowel's start or
 /// end, over `len` of the vowel but at most `max` seconds. The melody stays as written; a bend only
-/// colours the note's start or end (Mandarin's tones, Japanese pitch accent, an English scoop).
+/// colours the note's start or end (Japanese pitch accent, an English scoop).
+///
+/// With `to`, the pitch moves from `st` to `to` semitones across the bend instead of holding `st`,
+/// and the bend is measured on the syllable's whole voiced rhyme (the vowel and a nasal coda), so
+/// bends that meet draw one contour through the syllable: a lexical tone (Mandarin's).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bend {
@@ -157,4 +161,8 @@ pub struct Bend {
     pub len: f64,
     pub max: f64,
     pub st: f64,
+    /// where the pitch has moved to by the bend's other end (semitones from the note); None: it
+    /// holds `st`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<f64>,
 }

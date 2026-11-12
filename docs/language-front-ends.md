@@ -223,8 +223,10 @@ A sung syllable per sounding note:
   to does nothing. What each does is in [architecture.md](architecture.md), section 4.
 - `pitch`: bends that colour the note's start or end, `st` semitones from the note, over `len` of the
   vowel and at most `max` seconds. The melody stays as written. A start bend begins in the onset,
-  so a rising tone starts low rather than starting at the note and dipping. A sung song does not
-  draw them by default: see "Tone bends are off in singing".
+  so a rising tone starts low rather than starting at the note and dipping. With `to`, the pitch
+  moves from `st` to `to` across the bend instead of holding `st`, and the bend is measured on the
+  vowel and a nasal coda together, so bends that meet draw one contour through the syllable (a
+  lexical tone). A sung song does not draw them by default: see "Tone bends are off in singing".
 - `breath`: lung drive while the note sounds, relative to the phrase's (unsaid: the phrase's).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: the song's
   `nasalLead`, off by default).
@@ -319,14 +321,31 @@ The biggest wins came from the sounds the recogniser confused most: the apical v
 
 ### Tone bends are off in singing
 
-The front end still writes a Mandarin tone's bends into each syllable's `pitch` (2 and 3 scoop up
-from 3.5 and 4 semitones below, 4 starts 1.5 above and drops 4 at the note's end), and `tone_bends`
-and its tests are unchanged. But the sing planner draws them only as strongly as the song asks:
-`SongOptions::bend_strength`, `"bendStrength"` in a melody file, `bendStrength` in the app's
-`SongExtras`. The default is 0, the melody as written; 1 draws the bends exactly as the front end
-wrote them (`tests/bends.rs`); in between scales their semitones.
+The front end writes a Mandarin tone into each syllable's `pitch`, and the sing planner draws it
+only as strongly as the song asks: `SongOptions::bend_strength`, `"bendStrength"` in a melody file,
+`bendStrength` in the app's `SongExtras`. The default is 0, the melody as written; 1 draws the
+tones as the front end wrote them; in between scales their semitones.
 
-Why: the ASR score preferred the bends (about 4 points, table above) and the ears did not. A native
+The tones are contours (`Bend::to`), in semitones from the note, which is the first tone's level:
+
+| Tone | Chao | Path (semitones from the note) |
+|---|---|---|
+| 1 | 55 | level on the note |
+| 2 | 35 | -5 → -5.5 over the first 30%, then up to the note |
+| 3 | 214 | -6 → -10.5 over the first half, then back up to -5 |
+| 3 inside a word | 21 | -6 → -10, no rise (半三声) |
+| 4 | 51 | +2 → +1.5 over the first 20%, then down to -9 |
+| neutral | | -4 → -7 |
+
+A contour is measured on the vowel and a nasal coda together (烫 tàng is still falling in its -ng),
+it begins in the onset, and a phrase's last syllable holds its last pitch while the voice fades.
+`tests/mandarin_tones.rs` measures each on a 0.4 s syllable. Until this the tones were held bends:
+2 and 3 both started 3.5-4 semitones low and jumped to the note, and 4 dropped 4 at its end, so 2
+and 3 were the same shape and a native listener, hearing single syllables, called every one a
+second tone. The scramble numbers in this file that say "bends on" were measured with those held
+bends (the commit before this change reproduces them), not with these contours.
+
+Why off in singing: the ASR score preferred the bends (about 4 points, table above) and the ears did not. A native
 Mandarin speaker listening to the demo song heard "a foreigner reciting the tones while singing",
 and four independent listening diagnoses agreed with him: the scoops and the fall at a note's end
 sound out of tune against the tune. In sung Mandarin the melody overrides the lexical tone, and

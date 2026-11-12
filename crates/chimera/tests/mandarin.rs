@@ -72,7 +72,8 @@ fn tones_become_bends_and_text_keeps_the_character() {
     assert_eq!(s[0].pitch, tone_bends(2)); // sandhi: sung as a rising tone
     assert_eq!(s[1].pitch, tone_bends(3));
     assert!(s[1].word_end && !s[0].word_end);
-    assert!(tone_bends(1).is_empty() && tone_bends(5).is_empty());
+    assert!(tone_bends(1).is_empty());
+    assert_eq!(tone_bends(5).len(), 1); // the neutral tone: low and falling
     assert_eq!(tone_bends(4).iter().map(|b| b.at).collect::<Vec<_>>(), [Edge::Start, Edge::End]);
 }
 
@@ -102,11 +103,11 @@ fn pinyin_with_tones_is_mandarin_and_without_is_english() {
     assert_eq!(text, ["nǐ", "hǎo", "xiè", "xie", "ni3", "hao3", "de5", "xī", "ān", "nǚ"]);
     let ipa: Vec<&str> = t.iter().map(|x| x.1.as_str()).collect();
     assert_eq!(ipa, ["ni", "xaʊ̠", "ɕiɛ", "ɕiɛ", "ni", "xaʊ̠", "t˭ə", "ɕi", "ʔan", "ny"]);
-    // nǐhǎo is one word: third-tone sandhi sings nǐ rising (one bend); "ni3 hao3" are two words
+    // nǐhǎo is one word: third-tone sandhi sings nǐ rising; "ni3 hao3" are two words
     assert_eq!(t[0].2, tone_bends(2).len());
     assert_eq!(t[4].2, tone_bends(3).len());
-    // the unmarked syllable of a marked word is neutral: no bend
-    assert_eq!(t[3].2, 0);
+    // the unmarked syllable of a marked word is neutral: low and falling
+    assert_eq!(t[3].2, tone_bends(5).len());
     // English: no tones, not pinyin; an accented word that isn't pinyin isn't re-entered midway
     let e: Vec<String> = typed("hello café it's").into_iter().map(|x| x.0).collect();
     assert_eq!(e, ["hel", "lo", "caf", "it's"]);

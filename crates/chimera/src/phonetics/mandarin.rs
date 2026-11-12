@@ -10,8 +10,8 @@
 //!   turns the others second (你好 ni2 hao3).
 //! - Pinyin → IPA on the inventory. Stops and affricates say their aspiration, which is what
 //!   Mandarin contrasts: b d g z zh j are unaspirated (p˭ t˭ k˭ ts˭ tʂ˭ tɕ˭), p t k c ch q aspirated.
-//! - Tones → pitch bends ([`tone_bends`]): the melody stays as written, the tone colours the
-//!   note's start or end.
+//! - Tones → pitch contours ([`tone_bends`]), which a song draws only when it asks for tones: by
+//!   default the melody stays as written.
 //!
 //! [`Pinyin`] reads Mandarin typed as pinyin instead, with no lexicon: a Latin word that carries
 //! tones (marks, "nǐhǎo", or numbers, "ni3 hao3") and parses as pinyin. Toneless words stay
@@ -134,15 +134,40 @@ fn third_tones(py: &mut [String]) {
     }
 }
 
-/// How a Mandarin tone bends its sung note (semitones from the note; see [`Bend`]): 2 scoops up
-/// from below, 3 dips, 4 starts a little high and falls off the end, 1 and 5 stay on the note.
+/// A Mandarin tone as the pitch's path through its syllable, in semitones from the note, which is
+/// the first tone's level (see [`Bend`]; a song draws these only when it asks for tones). In Chao's
+/// numbers, one step about 2.5 semitones: 1 is 55, level on the note; 2 is 35, low and still for
+/// the first third, then rising to the note; 3 is 214, falling to the bottom of the voice and
+/// coming part of the way back; 4 is 51, from a little above the note down to the bottom; the
+/// neutral tone is short, low and falling. (As held bends, 2 and 3 were both a low start that
+/// jumped up to the note: every toned syllable sounded like a second tone.)
 pub fn tone_bends(tone: u8) -> Vec<Bend> {
-    let b = |at, len, max, st| Bend { at, len, max, st };
+    let b = |at, len, st, to| Bend { at, len, max: MAX_BEND, st, to: Some(to) };
     match tone {
-        2 => vec![b(Edge::Start, 0.45, 0.25, -3.5)],
-        3 => vec![b(Edge::Start, 0.55, 0.3, -4.0)],
-        4 => vec![b(Edge::Start, 0.25, 0.12, 1.5), b(Edge::End, 0.4, 0.2, -4.0)],
+        2 => vec![b(Edge::Start, 0.3, -5.0, -5.5), b(Edge::End, 0.7, -5.5, 0.0)],
+        3 => vec![b(Edge::Start, 0.5, -6.0, -10.5), b(Edge::End, 0.5, -10.5, -5.0)],
+        4 => vec![b(Edge::Start, 0.2, 2.0, 1.5), b(Edge::End, 0.8, 1.5, -9.0)],
+        5 => vec![b(Edge::Start, 1.0, -4.0, -7.0)],
         _ => vec![],
+    }
+}
+
+/// A tone's bends have no cap in seconds: the contour is the syllable's length, whatever it is.
+const MAX_BEND: f64 = 1e9;
+
+/// A third tone that isn't its word's last syllable: low and falling, without the rise (半三声, 21).
+fn half_third() -> Vec<Bend> {
+    vec![Bend { at: Edge::Start, len: 1.0, max: MAX_BEND, st: -6.0, to: Some(-10.0) }]
+}
+
+/// Third tones inside a word (every syllable but its last) are half thirds.
+fn half_thirds(word: &mut [Syllable]) {
+    let third = tone_bends(3);
+    let n = word.len();
+    for s in word.iter_mut().take(n.saturating_sub(1)) {
+        if s.pitch == third {
+            s.pitch = half_third();
+        }
     }
 }
 
@@ -412,6 +437,7 @@ impl FrontEnd for Mandarin<'_> {
             }
             out.extend(pinyin_syllable(py, &c.to_string()));
         }
+        half_thirds(&mut out);
         out
     }
 }
@@ -561,6 +587,8 @@ impl FrontEnd for Pinyin {
         let Some(sy) = parse_pinyin(word) else { return Vec::new() };
         let mut py: Vec<String> = sy.iter().map(|s| s.1.clone()).collect();
         third_tones(&mut py);
-        sy.iter().zip(&py).filter_map(|((text, _), p)| pinyin_syllable(p, text)).collect()
+        let mut out: Vec<Syllable> = sy.iter().zip(&py).filter_map(|((text, _), p)| pinyin_syllable(p, text)).collect();
+        half_thirds(&mut out);
+        out
     }
 }
