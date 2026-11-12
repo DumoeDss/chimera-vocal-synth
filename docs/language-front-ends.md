@@ -65,6 +65,36 @@ F1 / F2, women 533 / 945) rather than English /ʊ/ "hood" (F2 ~1120). It is also
 (the nuclei `aʊ̠`, `əʊ̠`) and of iao, iou and iong (`iaʊ̠`, `iəʊ̠`, `iʊ̠`); ou's central ə start is as it was.
 The fit reaches F1 and F2 within 5 % on every body (`vowel_data.rs`). `tests/mandarin_ong.rs`.
 
+### Mandarin's rhymes close in one movement
+
+A Mandarin rhyme is one sound. Its ending (韵尾: the off-glide of ai ei ao ou and of iao iou uai uei,
+or -n / -ng) is where the vowel ends up, not a second sound after it. Sung as English is (the
+off-glide holding the last 35% of the note, the nasal coda a consonant of 100-130 ms after a vowel
+nasalised by a step), a native listener heard every compound and nasal rhyme as two sounds, "ang
+is an + ng", and far too long. Measured on a 1.33 s note: 奥 ao was [a] still for 0.76 s, a jump in
+80 ms, then [ʊ] still for 0.35 s; 昂 ang was an oral [ɑ], the tongue body jumping in 40 ms, then
+0.4 s of murmur; and a phrase's last -n let go while the breath was still on, [an-ə], a 3.5 dB bump.
+
+So the front end marks every syllable `closing: 0.2`, and the song planner (`sing.rs`):
+
+- sings a falling off-glide as one movement over the note's end, at most 0.2 s and at most 60% of
+  the vowel: the glide comes in over half of it while the main vowel lets go over the other half
+  (`Segment::glide`), so neither target is held in between. 奥 for 1.33 s is [a] until 0.22 s
+  before its end; for 0.4 s it starts moving 0.2 s in.
+- lowers the velum gradually over the nasalised part of the vowel (the last 60%, at most 0.25 s),
+  fully open 60 ms before the coda closes. Opening later, a close vowel (东 dong) was a stop for
+  a moment, a 9 dB dip.
+- moves the tongue body toward the coda over the vowel's last 150 ms: up toward the velum for -ng
+  (and back, from a front vowel: 英 ying), forward and up for -n, so 安 an ends fronted (F2 1450
+  → 1670 Hz) and 昂 ang does not. This is the cue that tells them apart before the closure.
+- holds -n for 70 ms and -ng for 80 ms (they were 100 and 130), and at the end of a phrase keeps
+  the closure until the voice has faded.
+
+Rising finals (ia ua uo üe, the medial glide) were already one movement and are unchanged.
+`tests/mandarin_rhymes.rs` holds the measurements. Not measured: the scramble test below, whose
+rows for held nasal codas (41.6%) and 35% off-glides were tuned to the recogniser, not to a native
+ear; this change went by a native listener's report.
+
 Both Mandarin front ends sing erhua as one syllable ending in ɻ: 一点儿 is 一 + 点儿 (pinyin
 `yìdiǎnr`), 哪儿 is `nǎr`. A 儿 that is a word's own syllable (女儿, 儿子) stays a syllable.
 
@@ -198,6 +228,10 @@ A sung syllable per sounding note:
 - `breath`: lung drive while the note sounds, relative to the phrase's (unsaid: the phrase's).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: the song's
   `nasalLead`, off by default).
+- `closing`: the rhyme's ending is one closing movement at the end of the note, this long at most
+  (seconds), instead of a part of its own. Mandarin says 0.2 for every syllable: see "Mandarin's
+  rhymes close in one movement". Unsaid: a falling diphthong's off-glide holds the last 35% of the
+  note and a nasal coda is a consonant after the vowel.
 - A melisma note is `"melisma": true` with the same nucleus; its coda moves to the run's last note.
 - `text` is what the mouth, the lyrics panel and the piano roll show.
 

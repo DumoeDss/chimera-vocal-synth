@@ -3,6 +3,8 @@
 //!    their time from the previous note, as singers do), its coda just before the next onset.
 //!  - Diphthongs sustain their first vowel and glide to the second at the end of the note. A rising
 //!    one's medial glide is sung with the onset, so the main vowel holds from the beat.
+//!  - A closing rhyme (`Syllable::closing`, Mandarin's) ends in one movement: its off-glide or its
+//!    nasal coda is where the vowel ends up at the end of the note, not a part held after it.
 //!  - A melisma ("-") carries the vowel onto further notes; the coda waits for the last of them.
 //!  - Vibrato blooms a quarter of a second into a held vowel.
 //!
@@ -14,7 +16,7 @@
 
 use super::inventory::phoneme;
 use crate::anatomy::human::{ArticKey, BodyMix};
-use super::planner::{PlanOptions, held_vowel, offglide, onglide, plan_utterance};
+use super::planner::{PlanOptions, held_vowel, offglide, onglide, plan_utterance, vowel_artic};
 use super::{Bend, Edge, Intonation, Plan, PlannedSegment, Segment, Syllable};
 use crate::control::score::{ControlKey, Gesture, Targets};
 use crate::math::{js_max, js_min};
@@ -71,6 +73,23 @@ const OFFGLIDE: f64 = 0.35;
 /// toward 哈 ha); it follows the initial, so it keeps its own time, and is a vowel segment, so it
 /// takes the Öhman coarticulation of a vowel rather than a consonant's constriction.
 const MEDIAL_GLIDE: f64 = 0.05;
+
+/// A closing rhyme (`Syllable::closing`, Mandarin's) ends in one movement, over at most this share
+/// of the vowel: on a short note the main vowel keeps the rest, on a long one the movement is as
+/// long as the front end says and the vowel holds until then. Before, the ending was a part of its
+/// own: 奥 ao sung for 1.3 s was [a] still for 0.76 s, a jump in 80 ms, then [ʊ] still for 0.35 s,
+/// and 昂 ang was an oral [ɑ], a 40 ms jump of the tongue body, then 0.4 s of murmur: a native
+/// listener heard two sounds (a-u, an-ng) where Mandarin has one.
+const CLOSING_SHARE: f64 = 0.6;
+/// In a closing rhyme the tongue body is this far on its way to a velar coda when the coda closes
+/// (its strength against the vowel's 1.0: 1.2 is 55 % of the way), over this long at most (s). The
+/// dorsum is slow, so -ng is heard in the vowel's last 150 ms before the closure.
+const CLOSING_VELAR: f64 = 1.2;
+const CLOSING_APPROACH_MAX: f64 = 0.15;
+/// And toward an alveolar coda the tongue body fronts and rises (the body posture of an alveolar
+/// closure, as `oral_gestures` holds it during one), 0.6: 37 % of the way. This is what tells -n
+/// from -ng before the closure: 安 an's vowel ends fronted ([aɛ̃n], F2 rising), 昂 ang's backed.
+const CLOSING_ALVEOLAR: f64 = 0.6;
 
 /// a sung vowel keeps at least this long when a short note squeezes its consonants (s)
 const MIN_VOWEL: f64 = 0.05;
@@ -184,6 +203,11 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         // (note, vowel start, vowel end) of syllables with bends, and of vowels before a nasal coda
         let mut bend_spans: Vec<(usize, f64, f64)> = Vec::new();
         let mut nasal_spans: Vec<(f64, f64, f64, &str)> = Vec::new();
+        // (vowel start, vowel end, fraction nasalised, the tongue body's approach to the coda) of
+        // closing rhymes
+        let mut closing_spans: Vec<(f64, f64, f64, Option<(f64, Targets)>)> = Vec::new();
+        // a closing rhyme's nasal coda that ends the phrase: (its end, the closure it holds)
+        let mut final_coda: Option<(f64, Targets)> = None;
         let mut breath_spans: Vec<(f64, f64, f64)> = Vec::new();
         // each note's onset and coda consonants, at the note's pitch (a coda at the pitch of the
         // note whose syllable it ends; a melisma has neither)
@@ -237,17 +261,30 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             // when a melisma continues the vowel)
             let nuc = n.syl.nucleus.ipa.as_str();
             let rest = vdur;
-            match offglide(nuc).filter(|_| !next_melisma) {
-                Some(b) => {
+            // the syllable whose rhyme this is decides (a melisma's ending is its parent's)
+            let closing = last_of_chain(notes, k).closing.filter(|c| *c > 0.0);
+            match (offglide(nuc).filter(|_| !next_melisma), closing) {
+                // a closing rhyme: the vowel moves into the off-glide over the note's end and the
+                // glide is not held (half the movement is the glide coming in, half the vowel letting go)
+                (Some(b), Some(c)) => {
+                    let half = 0.5 * js_min(c, CLOSING_SHARE * rest);
+                    segs.push(nucleus_part(held_vowel(nuc), rest - half, hz, &n.syl.nucleus));
+                    segs.push(Segment { glide: Some(half), ..nucleus_part(b, half, hz, &n.syl.nucleus) });
+                }
+                (Some(b), None) => {
                     segs.push(nucleus_part(held_vowel(nuc), rest * (1.0 - OFFGLIDE), hz, &n.syl.nucleus));
                     segs.push(nucleus_part(b, rest * OFFGLIDE, hz, &n.syl.nucleus));
                 }
-                None => segs.push(nucleus_part(held_vowel(nuc), rest, hz, &n.syl.nucleus)),
+                (None, _) => segs.push(nucleus_part(held_vowel(nuc), rest, hz, &n.syl.nucleus)),
             }
             if coda.first().is_some_and(|c| matches!(c.ipa.as_str(), "m" | "n" | "ŋ")) {
-                // the syllable whose coda this is decides (a melisma's coda is its parent's)
                 let lead = last_of_chain(notes, k).nasal_lead.or(o.nasal_lead).unwrap_or(0.0);
-                if lead > 0.0 {
+                if closing.is_some() {
+                    closing_spans.push((times[k], times[k] + vdur, lead, coda_approach(&coda[0].ipa, held_vowel(nuc), o.body)));
+                    if k == j && coda.len() == 1 {
+                        final_coda = closure(&coda[0].ipa, o.body).map(|t| (times[k] + vdur + total(&coda), t));
+                    }
+                } else if lead > 0.0 {
                     // the tongue body's rise toward -ng after the back vowel ɑ (ang, iang, uang); after
                     // other vowels, and toward -n, it measured no better or worse
                     let place = if coda[0].ipa == "ŋ" && held_vowel(nuc) == "ɑ" { "velar" } else { "" };
@@ -288,6 +325,30 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
                     gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 2.5, t).label("coda approach"));
                 }
             }
+            // a closing rhyme's nasal coda: the velum comes down gradually over the nasalised part of
+            // the vowel (strength 2 follows the ramp itself, see Articulators) instead of dropping
+            // at its start, and the tongue body is on its way to a velar coda before it closes
+            for (a, b, lead, approach) in closing_spans {
+                let len = js_min(lead * (b - a), 0.25);
+                if len > 0.0 {
+                    // open before the coda's closure starts (~55 ms ahead of b): a close vowel that
+                    // closed first was a stop for a moment (东 dong dipped 9 dB before its -ng)
+                    gestures.push(Gesture::new(b - 0.06, b + 0.02, len, 0.03, 2.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
+                }
+                if let Some((strength, t)) = approach {
+                    let len = js_min(CLOSING_APPROACH_MAX, 0.5 * (b - a));
+                    gestures.push(Gesture::new(b - 0.01, b + 0.02, len, 0.03, strength, t).label("coda approach"));
+                }
+            }
+            // and at the end of a phrase it stays closed, the velum open, until the voice has faded:
+            // the closure used to let go as the breath stopped, a short vowel after the nasal
+            // (安 an ended [an-ə], a 3.5 dB bump)
+            if let Some((t, hold)) = final_coda {
+                // (the velum stays down past the tongue's release, so no pressure is left to pop. The
+                // release itself still measures -29 dB re the vowel, 0.2 s after the voice ends)
+                gestures.push(Gesture::new(t - 0.03, t + 0.1, 0.02, 0.12, 40.0, hold).label("coda held"));
+                gestures.push(Gesture::new(t - 0.03, t + 0.25, 0.02, 0.05, 4.0, Targets::default().with(ArticKey::Velum, 0.45)).label("velum"));
+            }
             // a syllable's own breath, over the phrase's (strength 1): it wins while the note sounds
             for &(a, b, level) in &breath_spans {
                 gestures.push(Gesture::new(a - 0.02, b, 0.05, 0.05, 8.0, Targets::default().with(ControlKey::BREATH, level)).label("syllable breath"));
@@ -302,6 +363,43 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         i = j + 1;
     }
     Plan { gestures, segments, end }
+}
+
+/// Where the tongue body heads in a closing rhyme's vowel before its nasal coda closes, and how
+/// strongly against the vowel (see [`CLOSING_VELAR`], [`CLOSING_ALVEOLAR`]).
+fn coda_approach(coda: &str, vowel: &str, body: BodyMix) -> Option<(f64, Targets)> {
+    let v = vowel_artic(vowel, body);
+    let at = |k: ArticKey| v.as_ref().and_then(|v| v.get(k));
+    match coda {
+        "ŋ" => {
+            let mut t = Targets::default();
+            // up toward the velum, unless the vowel's body is already close under it (ong, ing:
+            // any higher and the vowel itself is choked off before the coda)
+            let rise = at(ArticKey::TbY).is_none_or(|y| y < 6.95);
+            if rise {
+                t = t.with(ArticKey::TbY, 7.95);
+            }
+            // and back to the velar closure's place from a front vowel (英 ying [iə̃ŋ]: before, the
+            // tongue closed where [i] was and slid back inside the murmur)
+            let back = at(ArticKey::TbX).is_some_and(|x| x > 3.0);
+            if back {
+                t = t.with(ArticKey::TbX, 2.83);
+            }
+            (rise || back).then_some((CLOSING_VELAR, t))
+        }
+        "n" => Some((CLOSING_ALVEOLAR, Targets::default().with(ArticKey::TbX, 3.2).with(ArticKey::TbY, 7.4))),
+        _ => None,
+    }
+}
+
+/// A consonant's own closure: the targets of the articulators that make it.
+fn closure(ipa: &str, body: BodyMix) -> Option<Targets> {
+    let def = phoneme(ipa, body)?;
+    let mut t = Targets::default();
+    for (k, v) in def.targets.iter().filter(|(k, _)| def.dominant.contains(k)) {
+        t = t.with(k, v);
+    }
+    Some(t)
 }
 
 /// The syllable whose coda ends a melisma chain starting at note k.

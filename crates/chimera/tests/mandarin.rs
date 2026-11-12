@@ -148,9 +148,9 @@ fn erhua_merges_into_the_syllable_before() {
 fn mandarin_timing_and_vowels() {
     let s = syls("光天你风举");
     let dur = |segs: &[chimera::phonetics::Segment]| segs.iter().map(|x| x.dur).collect::<Vec<_>>();
-    // nasal codas held long enough to tell -n from -ng
-    assert_eq!(dur(&s[0].coda), [Some(0.13)]);
-    assert_eq!(dur(&s[1].coda), [Some(0.10)]);
+    // nasal codas a short murmur at the end of the rhyme (tests/mandarin_rhymes.rs)
+    assert_eq!(dur(&s[0].coda), [Some(0.08)]);
+    assert_eq!(dur(&s[1].coda), [Some(0.07)]);
     // nasal onsets and f longer; an unaspirated affricate's frication shorter
     assert_eq!(s[2].onset[0].dur, Some(0.09));
     assert_eq!(s[3].onset[0].dur, Some(0.13));
