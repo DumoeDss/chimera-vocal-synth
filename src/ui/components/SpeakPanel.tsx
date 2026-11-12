@@ -208,8 +208,8 @@ export function SpeakRight() {
               </p>
               <div className="say-skipped" aria-live="polite">
                 {skipped.map((l) => (
-                  <p key={l.what + l.why}>
-                    {l.what}: <span className="say-skipped-sym">{l.symbols.join(" ")}</span> ({l.why})
+                  <p key={l.what}>
+                    {l.what}: <span className="say-skipped-sym">{l.symbols.join(" ")}</span>
                   </p>
                 ))}
               </div>

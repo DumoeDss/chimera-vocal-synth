@@ -99,7 +99,8 @@ impl SkippedIpa {
         self.unknown.is_empty() && self.no_sound.is_empty() && self.ignored_marks.is_empty()
     }
 
-    /// One line per kind that is not empty, ready to print.
+    /// One line per kind that is not empty, ready to print after `warning: `. The labels are the
+    /// ones the Speak notice shows (`Not said`, `No sound yet`, `Mark ignored`).
     pub fn warnings(&self) -> Vec<String> {
         let mut out = Vec::new();
         let mut line = |what: &str, items: &[String]| {
@@ -107,9 +108,9 @@ impl SkippedIpa {
                 out.push(format!("{what}: {}", items.join(" ")));
             }
         };
-        line("not said, symbols the engine does not know", &self.unknown);
-        line("not said, symbols the engine has no sound for", &self.no_sound);
-        line("said without the mark, which the engine does not model or cannot apply there", &self.ignored_marks);
+        line("not said", &self.unknown);
+        line("no sound yet", &self.no_sound);
+        line("mark ignored", &self.ignored_marks);
         out
     }
 }

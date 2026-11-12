@@ -149,6 +149,7 @@ fn no_sound_is_derived_not_listed() {
 #[test]
 fn warnings_make_one_line_per_kind() {
     let r = skipped_ipa("ɕa˥ n̥");
-    assert_eq!(r.warnings().len(), 2);
+    assert_eq!(r.warnings(), ["not said: ˥", "mark ignored: n̥"]);
+    assert_eq!(skipped_ipa("ʏ").warnings(), ["no sound yet: ʏ"]);
     assert!(SkippedIpa::default().warnings().is_empty());
 }

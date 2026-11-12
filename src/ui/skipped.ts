@@ -9,11 +9,10 @@ export function ipaPhraseTexts(text: string): string[] {
     .filter(Boolean);
 }
 
-/** One line of the notice: what the engine did with `symbols`, and why, in plain words. */
+/** One line of the notice: what the engine did with `symbols`. */
 export interface SkippedLine {
   what: string;
   symbols: string[];
-  why: string;
 }
 
 /** The notice's lines for IPA typed into Speak, one per kind that is not empty (none: nothing is skipped). */
@@ -24,13 +23,13 @@ export function skippedLines(text: string): SkippedLine[] {
 
 export function skippedLinesOf(r: SkippedIpa): SkippedLine[] {
   const out: SkippedLine[] = [];
-  if (r.unknown.length) out.push({ what: "Not said", symbols: r.unknown, why: "not symbols this voice knows" });
-  if (r.noSound.length) out.push({ what: "Not said", symbols: r.noSound, why: "known, but this voice has no sound for them" });
-  if (r.ignoredMarks.length) out.push({ what: "Said without the mark", symbols: r.ignoredMarks, why: "this voice can't make that mark there" });
+  if (r.unknown.length) out.push({ what: "Not said", symbols: r.unknown });
+  if (r.noSound.length) out.push({ what: "No sound yet", symbols: r.noSound });
+  if (r.ignoredMarks.length) out.push({ what: "Mark ignored", symbols: r.ignoredMarks });
   return out;
 }
 
-/** a line as plain text (`Not said: ɕ ˥ (not symbols this voice knows)`) */
+/** a line as plain text (`Not said: ɕ ˥`) */
 export function skippedText(l: SkippedLine): string {
-  return `${l.what}: ${l.symbols.join(" ")} (${l.why})`;
+  return `${l.what}: ${l.symbols.join(" ")}`;
 }
