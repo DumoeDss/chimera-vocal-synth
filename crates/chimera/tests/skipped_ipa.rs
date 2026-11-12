@@ -58,11 +58,30 @@ fn a_mark_the_tokenizer_reads_is_not_reported() {
     }
 }
 
+/// Review of the PR: the syllabic (U+0329) and non-syllabic (U+032F) marks are in most dictionary
+/// IPA and the voice says the sound, so a notice for them fires on many pastes for nothing.
+#[test]
+fn the_syllabic_and_non_syllabic_marks_are_not_reported() {
+    // the reviewer's examples, and the same marks on other letters, after a length mark, at the
+    // start, after a space or stress mark, and doubled
+    for ipa in ["a\u{26A}\u{32F}", "b\u{28C}tn\u{329}", "l\u{329}", "\u{250}\u{32F}", "n\u{2D0}\u{329}", "\u{329}a", "a \u{32F}b", "\u{2C8}\u{329}a", "m\u{329}\u{32F}", "a\u{2D0}\u{32F}", "p\u{329}"] {
+        assert!(skipped_ipa(ipa).is_empty(), "{ipa:?}: {:?}", skipped_ipa(ipa));
+    }
+}
+
+#[test]
+fn a_syllabic_mark_is_not_shown_beside_a_mark_that_is_reported() {
+    // n + devoicing ring + syllabic mark reports the ring only
+    assert_eq!(skipped_ipa("n\u{325}\u{329}").ignored_marks, strs(&["n\u{325}"]));
+    assert_eq!(skipped_ipa("n\u{329}\u{325}").ignored_marks, strs(&["n\u{325}"]));
+    // an unknown letter is still reported, without the mark
+    assert_eq!(skipped_ipa("\u{298}\u{329}").unknown, strs(&["\u{298}"]));
+}
+
 #[test]
 fn marks_that_are_not_modelled_or_cannot_apply_are_reported_with_their_letter() {
-    // a devoicing ring, a syllabic mark and a nasal tilde on a consonant are not modelled
+    // a devoicing ring and a nasal tilde on a consonant are not modelled
     assert_eq!(skipped_ipa("n\u{325}").ignored_marks, strs(&["n\u{325}"]));
-    assert_eq!(skipped_ipa("l\u{329}").ignored_marks, strs(&["l\u{329}"]));
     assert_eq!(skipped_ipa("m\u{303}").ignored_marks, strs(&["m\u{303}"]));
     // ʲ after a vowel, ʱ after a voiceless stop, and a vowel mark on a consonant after a length mark
     assert_eq!(skipped_ipa("aʲ").ignored_marks, strs(&["aʲ"]));

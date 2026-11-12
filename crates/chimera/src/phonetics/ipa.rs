@@ -13,6 +13,10 @@ const ALIASES: [(&str, &str); 9] = [("t͡ʃ", "tʃ"), ("d͡ʒ", "dʒ"), ("t͡s",
 /// combining tilde and combining diaeresis below: the vowel before them is nasalized, breathy
 const NASALIZED: char = '\u{303}';
 const BREATHY: char = '\u{324}';
+/// combining inverted breve below (non-syllabic, `aɪ̯`) and combining vertical line below (syllabic,
+/// `bʌtn̩`): in most dictionary IPA, and the voice says the sound they mark, so they are never reported
+const NONSYLLABIC: char = '\u{32F}';
+const SYLLABIC: char = '\u{329}';
 /// NFC composes these vowels with their mark into one code point; the tokenizer reads them as the
 /// vowel and the mark (those that don't compose, like ɛ̃, arrive as two)
 const PRECOMPOSED: [(&str, &str); 7] = [("ã", "a\u{303}"), ("õ", "o\u{303}"), ("ẽ", "e\u{303}"), ("ĩ", "i\u{303}"), ("ũ", "u\u{303}"), ("ỹ", "y\u{303}"), ("ṳ", "u\u{324}")];
@@ -83,7 +87,8 @@ pub struct SkippedIpa {
     /// symbols the tokenizer knows and the planner has no sound for (a vowel letter without a
     /// calibrated vowel): dropped
     pub no_sound: Vec<String>,
-    /// letters written with a mark the engine does not model (a devoicing ring, a syllabic mark),
+    /// letters written with a mark the engine does not model (a devoicing ring; not the syllabic and
+    /// non-syllabic marks `n̩` `ɪ̯`, which are in most dictionary IPA and the voice says the sound),
     /// or a mark it reads written where it cannot apply (`ʲ` after a vowel, `ʱ` after a voiceless
     /// stop), shown with the letter: the letter is said, the mark is not
     pub ignored_marks: Vec<String>,
@@ -120,6 +125,9 @@ fn has_sound(sym: &str) -> bool {
 /// does not know at all, symbols it knows but has no sound for (derived: `tokenize_ipa` emits
 /// them and the planner has no vowel or consonant for them, so the list shrinks as sounds are
 /// added), and marks it does not model or cannot apply (the letter is said, the mark is not).
+/// The syllabic and non-syllabic marks (U+0329 `n̩`, U+032F `ɪ̯`) are the exception: they are in most
+/// dictionary IPA and the voice says the sound they mark, so they are never reported, on any letter
+/// or where no letter precedes them.
 ///
 /// The marks `tokenize_ipa` reads (`ʰ ˭`, a tilde or diaeresis below on a vowel, `ʲ`, `ʱ` where
 /// they apply), stress, length, tie bars, spaces and `. , |` are not reported, and neither are
@@ -224,6 +232,12 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             i += 1;
             continue;
         }
+        // a syllabic or non-syllabic mark with no sound before it to sit on (the start, after a space
+        // or a length mark): dropped, as it always was, but not reported either
+        if ch == NONSYLLABIC || ch == SYLLABIC {
+            i += 1;
+            continue;
+        }
         let mut tok = String::new();
         for m in MULTI {
             if starts_with_at(&s, i, m) {
@@ -251,8 +265,9 @@ fn tokenize(input: &str, gaps: &mut Gaps) -> Vec<Segment> {
             continue;
         }
         let is_v = is_vowel_token(&tok);
-        // what is left unread: any mark but a tilde or diaeresis below on a vowel
-        let unread: String = s[marks_from..i].iter().copied().filter(|c| !(is_v && (*c == NASALIZED || *c == BREATHY))).collect();
+        // what is left unread: any mark but a tilde or diaeresis below on a vowel, and the
+        // syllabic and non-syllabic marks on any letter (never reported)
+        let unread: String = s[marks_from..i].iter().copied().filter(|c| !(is_v && (*c == NASALIZED || *c == BREATHY)) && *c != NONSYLLABIC && *c != SYLLABIC).collect();
         if !unread.is_empty() {
             add(&mut gaps.marked, format!("{tok}{unread}"));
         }
