@@ -79,6 +79,33 @@ fn apical(ipa: &str, bname: &str, i_lips: Option<[f64; 3]>) -> Option<Apical> {
     Some(Apical { lip_ap, lip_prot, lip_width, tt_x: c.get(ArticKey::TtX)?, tt_y: c.get(ArticKey::TtY)? - APICAL_OPENING, curl: c.get(ArticKey::TtCurl).unwrap_or(0.0) })
 }
 
+/// Where a vowel's Nelder-Mead search starts, when the generic height/back guess is not enough:
+/// the (body, vowel) entry whose solved posture is the start. Only the female [u̠] has one, the
+/// male's. [u̠] is a corner of the tube (tbX, jaw, lip width at their lower bounds, protrusion at
+/// its upper), and from the generic guess the female fit settled in another basin (jaw 1.8,
+/// F2 +11 %), as did every start from the English [u] (jaw 1.6, F2 +10 % for male and female).
+/// Deterministic: the male body is fitted before the female one, in a full run and, with
+/// `--missing`, from the file. The start also centres the cost's priors, as the generic guess does.
+fn start_from(ipa: &str, body: &str) -> Option<(&'static str, &'static str)> {
+    match (ipa, body) {
+        ("u̠", "female") => Some(("male", "u̠")),
+        _ => None,
+    }
+}
+
+/// The 9 fitted coordinates (`VOWEL_KEYS` order) of the entry `ipa` in a body's table.
+fn solved_posture(table: &[(String, Json)], ipa: &str) -> Option<Vec<f64>> {
+    let Json::Obj(entry) = &table.iter().find(|(k, _)| k == ipa)?.1 else { return None };
+    let Json::Obj(artic) = &entry.iter().find(|(k, _)| k == "artic")?.1 else { return None };
+    ["tbX", "tbY", "jaw", "lipAp", "lipProt", "lipWidth", "root", "larynx", "ttCurl"]
+        .iter()
+        .map(|key| match artic.iter().find(|(k, _)| k == key)?.1 {
+            Json::Num(x) => Some(x),
+            _ => None,
+        })
+        .collect()
+}
+
 fn to_artic(p: &[f64], fixed: Option<&Apical>) -> HumanArtic {
     let (tb_x, tb_y, jaw, mut lip_ap, mut lip_prot, mut lip_width, root, larynx, mut curl) =
         (p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
@@ -191,6 +218,18 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
             ];
             if vw.ipa == "ɯ" {
                 x0 = vec![2.6, 7.35, 0.25, 0.5, 0.1, 0.65, 0.4, 0.2, 0.0];
+            }
+            // a declared start replaces the generic guess, and the priors below centre on it too
+            if let Some(start) = start_from(vw.ipa, bname)
+                .and_then(|(b, e)| match &results {
+                    Json::Obj(m) => match &m.iter().find(|(k, _)| k == b)?.1 {
+                        Json::Obj(t) => solved_posture(t, e),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+            {
+                x0 = start;
             }
             let jaw_prior = 0.2 + 1.5 * vw.height;
             let pinned = apical(vw.ipa, bname, i_lips);

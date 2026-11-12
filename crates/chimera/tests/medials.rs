@@ -136,6 +136,6 @@ fn triphthongs_keep_their_off_glide() {
 fn a_live_note_sings_the_glide_short_too() {
     use chimera::phonetics::sing::{NoteOnOptions, plan_note_on};
     let g = plan_note_on(&py("hua4"), 50.0, &NoteOnOptions { body: "male".into(), vibrato: 0.0, tag: 10.0, legato_from: None });
-    let u = g.iter().find(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "u")).expect("the glide u");
+    let u = g.iter().find(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "u̠")).expect("the glide u");
     assert!(u.t1 - u.t0 <= 0.06, "the live glide is {} s", u.t1 - u.t0);
 }

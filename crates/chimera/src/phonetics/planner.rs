@@ -67,6 +67,14 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
         "əɝ" => &["ə", "ɝ"],
         "aɝ" => &["a", "ɝ"],
         "uɔ" => &["u", "ɔ"],
+        // Mandarin's own back u (Zee & Lee 2001: F2 ~660, English /u/'s is ~1000) as the medial glide:
+        // the same compounds with `u̠` (vowel_data.rs), beside the ones above, which stay as they were
+        "u̠a" => &["u̠", "a"],
+        "u̠ɔ" => &["u̠", "ɔ"],
+        "u̠ɑ" => &["u̠", "ɑ"],
+        "u̠ə" => &["u̠", "ə"],
+        "u̠aɪ" => &["u̠", "a", "ɪ"],
+        "u̠eɪ" => &["u̠", "e", "i"],
         // a central start, Mandarin's ou ([əʊ], where English [oʊ] starts nearly at [u])
         "əʊ" => &["ə", "ʊ"],
         // triphthongs: a glide into a falling diphthong (Mandarin iao, iou, uai, uei)
@@ -80,7 +88,7 @@ pub fn expand(ipa: &str) -> Option<&'static [&'static str]> {
 
 /// A rising nucleus (a rising diphthong or a triphthong): its first part is a short glide.
 pub fn is_rising(ipa: &str) -> bool {
-    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "əɝ" | "aɝ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ")
+    matches!(ipa, "ia" | "iɛ" | "iɑ" | "iʊ" | "ua" | "uo" | "uɑ" | "uə" | "yɛ" | "uɔ" | "əɝ" | "aɝ" | "iaʊ" | "iəʊ" | "uaɪ" | "ueɪ" | "u̠a" | "u̠ɔ" | "u̠ɑ" | "u̠ə" | "u̠aɪ" | "u̠eɪ")
 }
 
 /// A rising nucleus's on-glide (its first part), sung short at the note's start.

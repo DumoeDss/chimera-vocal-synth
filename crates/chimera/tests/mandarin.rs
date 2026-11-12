@@ -62,7 +62,7 @@ fn pinyin_becomes_ipa_with_aspiration_said() {
     let all: Vec<String> = syls("跑不吃学绿的爱").iter().map(ipa).collect();
     // p aspirated, b unaspirated; ch aspirated before an apical vowel; xue = ɕ ɥ ɛ; lü; neutral de; ai
     // apical ʅ after ch; xue's glide sings inside the vowel (yɛ); 爱 starts with a glottal catch
-    assert_eq!(all, ["pʰaʊ", "p˭u", "tʂʰʅ", "ɕyɛ", "ly", "t˭ə", "ʔaɪ"]);
+    assert_eq!(all, ["pʰaʊ", "p˭u̠", "tʂʰʅ", "ɕyɛ", "ly", "t˭ə", "ʔaɪ"]);
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn erhua_merges_into_the_syllable_before() {
     let shown = |t: &str| syls(t).iter().map(|s| format!("{}={}", s.text, ipa(s))).collect::<Vec<_>>().join(" ");
     // erhua: the syllable ends in ɻ, its -n gives way, a falling diphthong keeps its first vowel
     assert_eq!(shown("一点儿"), "一=i 点儿=t˭iɛɻ");
-    assert_eq!(shown("块儿"), "块儿=kʰuaɻ"); // uai → ua + ɻ (the off-glide gives way, the on-glide stays)
+    assert_eq!(shown("块儿"), "块儿=kʰu̠aɻ"); // uai → ua + ɻ (the off-glide gives way, the on-glide stays)
     assert_eq!(shown("哪儿"), "哪儿=naɻ");
     assert_eq!(shown("一会儿"), "一=i 会儿=xweɻ");
     // 儿 as a word's own syllable
@@ -155,7 +155,7 @@ fn mandarin_timing_and_vowels() {
     assert_eq!(s[2].onset[0].dur, Some(0.09));
     assert_eq!(s[3].onset[0].dur, Some(0.13));
     assert_eq!(s[4].onset[0].dur, Some(0.08));
-    // Mandarin's own vowels: eng back [ɤŋ], uo open [uɔ], ou central [əʊ], iao one three-part nucleus
+    // Mandarin's own vowels: eng back [ɤŋ], uo open [u̠ɔ], ou central [əʊ], iao one three-part nucleus
     let n: Vec<String> = syls("风多头鸟").iter().map(|s| s.nucleus.ipa.clone()).collect();
-    assert_eq!(n, ["ɤ", "uɔ", "əʊ", "iaʊ"]);
+    assert_eq!(n, ["ɤ", "u̠ɔ", "əʊ", "iaʊ"]);
 }

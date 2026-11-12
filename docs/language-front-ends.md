@@ -51,6 +51,15 @@ open, [aɚ]: the rising nuclei `əɝ` and `aɝ`, a quick [ə] or [a] before the 
 held from it. English's /ɝ/ held still put F3 low from the first frame; here it falls from ~2300 Hz at
 the beat to ~1870 over 120 ms (`tests/er.rs`).
 
+Mandarin's u (乌 wu, 虎 hu, and the u of 话 hua, 朵 duo, 光 guang, 对 dui) is its own vowel, `u̠` (u + U+0320),
+not English's /u/ "who'd": Beijing speakers' u has F2 ~660 Hz against ~1000 for the English one, which a
+native listener hears as an accent (Zee & Lee 2001, see the References in `architecture.md`). Its table
+entry is calibrated to their means (`vowel_data.rs`: men 345 / 661 Hz F1 / F2, women 345 / 759). The tube
+reaches F2 within 3 % but not F1 (men +11 %, women +6 %: tbX, jaw and lip width are at their lower bounds, lip
+protrusion at its upper), and the key can't be typed in IPA lyrics (the tokenizer drops the mark). The rising
+nuclei with that glide are `u̠a u̠ɔ u̠ɑ u̠ə` and the triphthongs `u̠aɪ u̠eɪ`, beside the plain `ua uɔ uɑ uə uaɪ ueɪ`
+(those keep English's u). `tests/mandarin_u.rs`.
+
 Both Mandarin front ends sing erhua as one syllable ending in ɻ: 一点儿 is 一 + 点儿 (pinyin
 `yìdiǎnr`), 哪儿 is `nǎr`. A 儿 that is a word's own syllable (女儿, 儿子) stays a syllable.
 
