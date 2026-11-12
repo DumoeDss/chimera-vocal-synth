@@ -56,6 +56,11 @@ pub struct Segment {
     /// vowel said with them part-open (IPA combining diaeresis below); None or false: modal
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub breathy: Option<bool>,
+    /// a vowel that is a glide off the vowel before it: reached over this long (s) while that vowel
+    /// lets go over the glide's own length, so the two are one movement, not two held targets;
+    /// None: a vowel of its own
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glide: Option<f64>,
 }
 
 impl Segment {
@@ -125,10 +130,12 @@ pub struct Syllable {
     /// None: the song's SongOptions::nasal_lead
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nasal_lead: Option<f64>,
-    /// the share of a falling diphthong's held note its off-glide takes (Mandarin's ai ao ei ou glide
-    /// over the last 35%); None: the planner's 20%
+    /// the rhyme's ending (a falling diphthong's off-glide, a nasal coda) is one closing movement at
+    /// the end of the note, this long at most (s), as Mandarin's 韵尾 is: the main vowel moves into
+    /// it and it is not held. None: the off-glide holds a share of the note and the coda is a
+    /// consonant of its own
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub offglide: Option<f64>,
+    pub closing: Option<f64>,
 }
 
 /// Which end of its sung vowel a pitch bend sits at.

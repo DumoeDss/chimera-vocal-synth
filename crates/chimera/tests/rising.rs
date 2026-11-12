@@ -28,16 +28,3 @@ fn a_rising_diphthong_sings_a_short_glide_then_holds_its_vowel() {
     let f = vowels("aɪ", 2.0);
     assert!(f[0].1 > f[1].1);
 }
-
-#[test]
-fn a_syllable_can_say_how_long_its_off_glide_is() {
-    let glide = |offglide: Option<f64>| {
-        let syl = Syllable { text: "x".into(), onset: vec![Segment::new("x")], nucleus: Segment::new("aɪ"), word_end: true, offglide, ..Default::default() };
-        let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl }], &SongOptions { body: "male".into(), bpm: 60.0, t0: 0.5, ..Default::default() });
-        let v: Vec<f64> = p.segments.iter().filter(|s| s.kind == "vowel").map(|s| s.t1 - s.t0).collect();
-        v[1] / (v[0] + v[1])
-    };
-    // the planner's 20% when unsaid (as before), the syllable's share when said
-    assert!((glide(None) - 0.2).abs() < 1e-9);
-    assert!((glide(Some(0.35)) - 0.35).abs() < 1e-9);
-}
