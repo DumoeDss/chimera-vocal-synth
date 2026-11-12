@@ -150,14 +150,21 @@ pub fn tone_bends(tone: u8) -> Vec<Bend> {
 
 
 /// Fraction of a vowel nasalised before -n/-ng.
-const NASAL_LEAD: f64 = 0.4;
+const NASAL_LEAD: f64 = 0.6;
 
-/// Mandarin's sung timing: nasal codas held long enough to tell -n from -ng (the place cue is in
-/// the vowel's last formant movement and the murmur; at the default ~60 ms they read as one).
+/// A rhyme's ending (the off-glide of ai ei ao ou, a nasal coda) is one closing movement at the end
+/// of the syllable, this long at most (s): Mandarin's 韵尾 is where the vowel ends up, not a second
+/// sound (`Syllable::closing`).
+const CLOSING: f64 = 0.2;
+
+/// Mandarin's sung timing: a nasal coda is a short murmur at the end of a closing rhyme. The place
+/// cue is in the vowel's last formant movement (the song planner moves the tongue body toward the
+/// coda over the vowel's last 150 ms). Held 130 and 100 ms after a vowel that didn't move, as they
+/// were, a native listener heard a second sound: 昂 as an + ng.
 fn coda_dur(ipa: &str) -> Option<f64> {
     match ipa {
-        "ŋ" => Some(0.13),
-        "n" => Some(0.10),
+        "ŋ" => Some(0.08),
+        "n" => Some(0.07),
         _ => None,
     }
 }
@@ -176,8 +183,6 @@ fn onset_dur(ipa: &str, aspirated: Option<bool>) -> Option<f64> {
 
 /// Aspiration length of Mandarin's aspirated stops and affricates (s).
 const MANDARIN_VOT: f64 = 0.09;
-/// The share of a falling diphthong's note its off-glide takes.
-const OFFGLIDE: f64 = 0.35;
 
 /// An initial → its sound and, for stops and affricates, its aspiration.
 fn initial(i: &str) -> Option<(&'static str, Option<bool>)> {
@@ -349,9 +354,7 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         // vowels before -n/-ng are nasalised. (Lighter neutral tones, breath 0.7 on 的 了, sounded
         // more natural but made them harder to recognise in the scramble test, so they stay full.)
         nasal_lead: (!coda.is_empty()).then_some(NASAL_LEAD),
-        // ai ao ei ou (and iao iou uai uei) glide off over the note's last 35%: at the planner's
-        // 20% the glide was too short to hear on a long note
-        offglide: super::planner::offglide(nucleus).is_some().then_some(OFFGLIDE),
+        closing: Some(CLOSING),
         ..Default::default()
     })
 }
@@ -383,7 +386,6 @@ fn rhotacize(s: &mut Syllable) {
     }
     s.coda = vec![Segment::new("ɻ")];
     s.nasal_lead = None;
-    s.offglide = None;
 }
 
 /// The Mandarin front end, over a loaded lexicon (without one it reads nothing).

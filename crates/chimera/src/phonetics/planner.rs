@@ -240,6 +240,8 @@ struct Seg<'a> {
     nasalized: Option<bool>,
     palatalized: Option<bool>,
     breathy: Option<bool>,
+    /// a glide off the vowel before it, reached over this long (s): see `Segment::glide`
+    glide: Option<f64>,
 }
 
 /// glottal abduction of breathy voice: /ɦ/'s, a gap the folds still vibrate across
@@ -283,10 +285,10 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
             };
             for (i, p) in parts.iter().enumerate() {
                 let dur = base * shares.get(i).copied().unwrap_or(1.0);
-                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, vot: None, nasalized: s.nasalized, palatalized: None, breathy: s.breathy });
+                segs.push(Seg { ipa: p, dur: Some(dur), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: i > 0, aspirated: None, vot: None, nasalized: s.nasalized, palatalized: None, breathy: s.breathy, glide: None });
             }
         } else {
-            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, vot: s.vot, nasalized: s.nasalized, palatalized: s.palatalized, breathy: s.breathy });
+            segs.push(Seg { ipa: &s.ipa, dur: Some(durs[si]), stress: s.stress, f0: s.f0, def: None, vowel: None, glide_from: false, aspirated: s.aspirated, vot: s.vot, nasalized: s.nasalized, palatalized: s.palatalized, breathy: s.breathy, glide: s.glide });
         }
     }
     for s in segs.iter_mut() {
@@ -329,8 +331,17 @@ pub fn plan_utterance(input: &[Segment], o: &PlanOptions) -> Plan {
         // vowel-to-vowel through the consonant (Öhman): the previous vowel lets go early in the gap
         // and the next one's target ramps in over most of it, so the tongue body is already near
         // the next vowel at the release and the transitions carry the consonant's place
-        let r_in = js_max(0.03, 0.75 * (times[i].t0 - prev)) + 0.01;
-        let r_out = js_max(0.03, 0.4 * (next - times[i].t1)) + 0.01;
+        let mut r_in = js_max(0.03, 0.75 * (times[i].t0 - prev)) + 0.01;
+        let mut r_out = js_max(0.03, 0.4 * (next - times[i].t1)) + 0.01;
+        // a glide off the vowel right before it (`Segment::glide`): it comes in over its given time
+        // and that vowel lets go over the glide's own length, so the tongue is on its way from the
+        // start of the one ramp to the end of the other and holds neither target in between
+        if let Some(g) = segs[i].glide.filter(|_| i > 0 && segs[i - 1].vowel.is_some()) {
+            r_in = js_max(0.01, g);
+        }
+        if i + 1 < segs.len() && segs[i + 1].vowel.is_some() && segs[i + 1].glide.is_some() {
+            r_out = js_max(0.01, times[i + 1].t1 - times[i + 1].t0);
+        }
         gestures.push(Gesture::new(times[i].t0, times[i].t1, r_in, r_out, 1.0, artic_targets(segs[i].vowel.as_ref().unwrap())).label(segs[i].ipa));
     }
     // utterance-initial/final consonants: lend them the nearest vowel's body posture
