@@ -73,15 +73,16 @@ data, `tools/build-mandarin.ts`), longest phrase first: 银行 is yín háng, �
   fourth tone (不会 bú huì, 一个 yí gè).
 - **Aspiration said:** p t k q ch c are aspirated with Mandarin's longer aspiration (`vot` 90 ms),
   b d g j zh z voiceless and unaspirated, not voiced stand-ins.
-- **Tones as pitch bends** (below): 2 scoops up from below, 3 starts low, 4 starts a little high and
-  falls off the end, 1 and the neutral tone stay on the note. The melody stays as written.
-- **Medials inside the vowel:** 话 is the rising diphthong `ua` and 鸟 the three-part `iaʊ`, sung as a
-  short glide on the beat, rather than a glide squeezed before the beat with the consonants.
-- **Mandarin's own vowels:** the apical vowels ɿ (四) and ʅ (是), eng [ɤŋ], uo [uɔ], ou [əʊ].
-- **Timing:** nasal codas held long enough to tell -n from -ng, j zh z with short frication, n m f
-  long enough to hear; the off-glide of ai ao ei ou over the note's last 35%.
-- **Before a nasal coda** the vowel nasalises over its last 40% (at most 0.25 s), and before -ng
-  after ɑ the tongue body rises toward the velum.
+- **Tones** are written into each syllable as a pitch contour (below), and a song draws them only
+  when it asks (`bendStrength`): sung Mandarin follows its melody.
+- **Medials inside the vowel:** 话 is the rising diphthong `u̠a` and 鸟 the three-part `iaʊ̠`: the
+  medial is a 50 ms glide that ends on the beat, after the initial consonant.
+- **Mandarin's own vowels:** the apical vowels ɿ (四) and ʅ (是), the back u `u̠` (乌, and the medial
+  of 话 朵 光) and ong's `ʊ̠` (东, and the off-glide of ao ou), er [əɚ] (二 [aɚ]), eng [ɤŋ], uo [u̠ɔ],
+  ou [əʊ̠].
+- **Rhymes close in one movement:** the off-glide of ai ei ao ou, and -n / -ng, are where the vowel
+  ends up at the end of the note, not a part held after it (`closing`, below).
+- **Timing:** j zh z with short frication, n m f long enough to hear, -n 70 ms and -ng 80 ms.
 - **Erhua:** 一点儿 sings 一 + 点儿, one syllable ending in ɻ; a 儿 that is a word's own syllable
   (女儿, 儿子) stays one.
 - **A vowel-initial syllable** (爱, 安) starts with a soft glottal catch, so it doesn't run into the
@@ -114,8 +115,41 @@ What each choice measured, on the scramble test (#80) where it was tuned:
 The last row is measured with #80's corrected judge (this branch, 8 scrambles × 2 voices); the
 others on #34 before that fix, so compare within a row. Now: **25.9% / 27.2%** scrambled (male /
 female) and 10% / 15% on the real poems. What's left: tone 3 (about half wrong, mostly heard as 4;
-a dip in the middle or a 214 measured no better), the sibilants (c heard as ch) and in/ing. A
-Mandarin speaker's ear is still wanted.
+a dip in the middle or a 214 measured no better), the sibilants (c heard as ch) and in/ing.
+
+These numbers were measured before the changes in "By a native speaker's ear" below, with the
+tones drawn as held bends and the endings held; the scramble test has not been run since.
+
+### By a native speaker's ear
+
+A native Mandarin speaker listened to the front end above, one round at a time, and heard "a
+foreigner speaking Chinese". Each report was measured in the render (level, LPC formants, the
+articulator tracks, the pitch) and fixed in the front end or in what a front end can ask of the
+singer; English and the other languages plan exactly as before.
+
+| Heard | Measured | Now | Test |
+|---|---|---|---|
+| 两 as *li-ang*, 快 as *ku-ai* | the medial sat on the beat for 80-100 ms; the main vowel 90% reached 200 ms after it | a 50 ms glide ending on the beat; 80-90 ms | `medials.rs` |
+| the tones recited over the tune | every 2nd and 3rd tone scooped up from 3.5-4 semitones below, every 4th dropped 4 at its end | a song follows its melody unless it asks for tones | `bends.rs` |
+| 二, 耳 as English "er" | /ɝ/ held still | a central vowel moving into the r-colouring, 二 more open | `er.rs` |
+| 只 as zhu, zhe or zhi | ɿ ʅ fitted to formants alone: lips narrowed to 0.2, no tongue tip | the sibilant's tip held open, lips spread, by the calibrator | `apical.rs` |
+| u and ong "English" | F2 997 and 1126 Hz (men); Beijing speakers' are 661 and 730 (Zee & Lee 2001) | `u̠` 649 Hz, `ʊ̠` 765 Hz | `mandarin_u.rs`, `mandarin_ong.rs` |
+| every compound and nasal rhyme as two sounds: "ang is an + ng" | 奥 for 1.33 s: [a] still 0.76 s, a jump, [ʊ] still 0.35 s. 昂: an oral [ɑ], a 40 ms jump of the tongue body, 0.4 s of murmur. A phrase's last -n let go into a vowel | one movement into the ending over the note's last 0.2 s at most; the velum lowers gradually; the tongue body approaches the coda's place; a final coda stays closed | `mandarin_rhymes.rs` |
+| every single syllable "a second tone" | with tones on, 2 and 3 were one shape (low, then a jump to the note) | each tone its own contour through the syllable | `mandarin_tones.rs` |
+
+The same listener's verdict on the result: clearly better, and still not a native speaker. What is
+known to be wrong, with where it was measured:
+
+- **Vowel qualities still lean English.** Against Zee & Lee's means for Beijing speakers: a's F1
+  is 20-25% low (the model's jaw and lip range ends before it), o's F2 23% high, e [ɤ]'s F2 14-18%
+  high, en and eng's F1 16-34% low, i and y's F2 7-12% low.
+- **Tones are citation shapes.** The contours come from the usual five-level numbers, not from
+  recordings; in a sentence there is no declination, a neutral tone doesn't follow the tone before
+  it, and neighbouring tones don't lean on each other. A full third tone is not creaky.
+- **Aspirated affricates** (q ch c) have a silent gap between the frication and the vowel.
+- **Rhythm is the notes'.** Nothing speaks Mandarin: Speak doesn't read it, and its timing and
+  intonation come with #48.
+- **Live notes** (a key pressed, the plugin) sing neither the closing rhyme nor a tone.
 
 ## The one format
 
@@ -144,7 +178,15 @@ Every front end writes the same thing, one sung syllable per sounding note:
 - A consonant may say its sung `"dur"` (s); unsaid, its spoken length × 0.8.
 - `pitch`: bends at the note's start, middle or end (below).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: none).
-- `offglide`: the share of a falling diphthong's note its off-glide takes (unsaid: 20%).
+- `closing`: the rhyme's ending is one closing movement at the end of the note, this long at most
+  (seconds; Mandarin says 0.2), instead of a part of its own. A falling off-glide then takes at
+  most that long and at most 60% of the vowel, half of it the glide coming in and half the vowel
+  letting go, so neither is held. Before a nasal coda the velum lowers gradually over the
+  nasalised part and is open 60 ms before the closure (later, 东's close vowel was a stop for a
+  moment), the tongue body moves toward the coda over the vowel's last 150 ms (up for -ng, back
+  from a front vowel, forward and up for -n: what tells 安 from 昂 before the closure), and a
+  phrase's last coda stays closed until the voice has faded. Unsaid: the off-glide holds the last
+  20% of the note and the coda is a consonant after the vowel.
 - A melisma note is `"melisma": true` with the same nucleus; its coda moves to the run's last note.
 - `text` is what the lyrics panel and the piano roll show.
 - `wordEnd` and `phraseEnd` may be left out (false).
@@ -168,6 +210,27 @@ onset, so the consonants already sing its pitch and a rise starts low rather tha
 middle bend is centred on the vowel (a dip or a peak inside it). A melisma continues at its written
 pitches. The planner draws bends without knowing what they mean: a language's tones are a table in
 its front end (Mandarin's is `tone_bends`). A syllable without bends sings exactly as before.
+
+A bend with `to` moves: the pitch goes from `st` to `to` across it instead of holding `st`, and it
+is measured on the vowel and a nasal coda together, so bends that meet draw one contour through the
+syllable. Mandarin's tones are written this way, in semitones from the note, which is the first
+tone's level:
+
+| Tone | Chao | Path |
+|---|---|---|
+| 1 | 55 | level on the note |
+| 2 | 35 | -5 → -5.5 over the first 30%, then up to the note |
+| 3 | 214 | -6 → -10.5 over the first half, then back up to -5 |
+| 3 inside a word | 21 | -6 → -10, no rise |
+| 4 | 51 | +2 → +1.5 over the first 20%, then down to -9 |
+| neutral | | -4 → -7 |
+
+**A song draws bends only as strongly as it asks**: `SongOptions::bend_strength`, `"bendStrength"`
+in a melody file. The default is 0, the melody as written; 1 draws them as the front end wrote
+them; in between scales their semitones. Drawn by default, a native speaker heard "a foreigner
+reciting the tones while singing": in sung Mandarin the melody overrides the lexical tone, and the
+words and the context carry it. The recogniser preferred the bends (the table above), the ear did
+not.
 
 ## Adding a language
 
