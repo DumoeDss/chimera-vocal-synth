@@ -150,7 +150,7 @@ pub enum Edge {
 
 /// A bend of the pitch inside a sung note: `st` semitones from the note, at the vowel's start or
 /// end, over `len` of the vowel but at most `max` seconds. The melody stays as written; a bend only
-/// colours the note's start or end (Japanese pitch accent, an English scoop).
+/// colours part of the note (a scoop, a pitch accent).
 ///
 /// With `to`, the pitch moves from `st` to `to` semitones across the bend instead of holding `st`,
 /// and the bend is measured on the syllable's whole voiced rhyme (the vowel and a nasal coda), so

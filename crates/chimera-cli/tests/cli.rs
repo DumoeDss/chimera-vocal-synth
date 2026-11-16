@@ -98,6 +98,39 @@ fn calibrate_vowels_missing_changes_nothing_when_nothing_is_missing() {
     assert!(std::fs::read_to_string(&out).unwrap() == committed, "nothing missing: the file must not change");
 }
 
+/// `--missing` fits a vowel the file lacks and leaves every other entry as it was. An apical vowel
+/// is fitted with its tip and lips pinned even though [i], whose lips it takes, is not refitted
+/// (it came out unpinned, lips narrowed, with no word of it).
+#[test]
+fn calibrate_vowels_missing_fits_only_the_missing_vowel_and_pins_an_apical_one() {
+    let committed = std::fs::read_to_string(format!("{PHONETICS}/vowelTargets.generated.json")).unwrap();
+    // the first ɿ entry is the male body's: cut it out of the text
+    let key = "\"ɿ\": {";
+    let a = committed[..committed.find(key).unwrap()].rfind('\n').unwrap();
+    let b = a + 1 + committed[a + 1..].find("\n  },\n").unwrap() + "\n  },".len();
+    let without = format!("{}{}", &committed[..a], &committed[b..]);
+    let json = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+    assert!(json(&without)["male"].get("ɿ").is_none() && json(&without)["female"].get("ɿ").is_some());
+    let out = tmp("vowelTargets-missing-apical.json");
+    std::fs::write(&out, &without).unwrap();
+    chimera(&["calibrate", "vowels", "male", "--missing", "--out", &out]);
+    let (was, now) = (json(&committed), json(&std::fs::read_to_string(&out).unwrap()));
+    for body in ["male", "female", "child"] {
+        for (ipa, entry) in was[body].as_object().unwrap() {
+            if (body, ipa.as_str()) != ("male", "ɿ") {
+                assert_eq!(&now[body][ipa], entry, "{body} {ipa} changed");
+            }
+        }
+    }
+    let (fit, i, old) = (&now["male"]["ɿ"]["artic"], &now["male"]["i"]["artic"], &was["male"]["ɿ"]["artic"]);
+    for k in ["lipAp", "lipProt", "lipWidth"] {
+        assert_eq!(fit[k], i[k], "ɿ's {k} is [i]'s");
+    }
+    for k in ["ttX", "ttY", "ttCurl"] {
+        assert_eq!(fit[k], old[k], "ɿ's {k} is pinned");
+    }
+}
+
 /// About 100 s in release. Not byte-identical: the Nelder–Mead fit runs 1 800 + 2 × 1 000
 /// iterations on a flat minimum, which amplifies last-ulp differences between V8's libm and Rust's
 /// (in the airway geometry and the transfer function) into ~1e-4 changes of the fitted posture.

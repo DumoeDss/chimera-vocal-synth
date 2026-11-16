@@ -193,6 +193,11 @@ pub fn vowels(a: &[String]) -> Result<(), String> {
         let mut i_lips: Option<[f64; 3]> = None;
         for vw in VOWELS {
             if missing_only && table.iter().any(|(k, _)| k == vw.ipa) {
+                // an [i] kept from the file still gives the apical vowels its lips: without them
+                // a missing ɿ or ʅ was fitted unpinned, with no word of it
+                if vw.ipa == "i" {
+                    i_lips = solved_posture(&table, "i").map(|p| [p[3], p[4], p[5]]);
+                }
                 continue;
             }
             let t = match bname {
