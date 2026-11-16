@@ -1,7 +1,7 @@
 """Sing a Mandarin singing corpus's songs with a CHIMERA build and compare each rhyme with the singer's.
 
   python tools/opencpop/compare.py <corpus root> <chimera exe> [--out out/opencpop]
-      [--per-singer n] [--limit n] [--ids a,b,...] [--jobs n] [--against other/report.json]
+      [--per-singer n | --blocks n] [--limit n] [--ids a,b,...] [--jobs n] [--against other/report.json]
       [--her-spans spans.json]   (selftest.py only: where a stand-in singer's finals really are)
 
 The corpus is Opencpop or M4Singer (opencpop.py reads both). The synth sings the singer's phonemes
@@ -57,6 +57,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("root"); ap.add_argument("exe")
     ap.add_argument("--out", default="out/opencpop"); ap.add_argument("--limit", type=int); ap.add_argument("--per-singer", type=int)
+    ap.add_argument("--blocks", type=int)
     ap.add_argument("--ids"); ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     ap.add_argument("--against"); ap.add_argument("--her-spans")
     a = ap.parse_args()
@@ -78,8 +79,22 @@ def main():
     if a.per_singer:
         by = {}
         for u in utts: by.setdefault(u[0].split("#")[0] if "#" in u[0] else "", []).append(u)
-        utts = [u for g in by.values() for u in g[::max(1, len(g) // a.per_singer)][:a.per_singer]]
+        # each singer from a different place in her list: ACE-Opencpop's voices all sing the same
+        # segments in the same order, and the same ones from each would be one sample thirty times
+        step = lambda g: max(1, len(g) // a.per_singer)
+        utts = [u for i, g in enumerate(by.values()) for u in g[(i * 7) % step(g)::step(g)][:a.per_singer]]
+    if a.blocks:
+        # ACE-Opencpop keeps its audio in 40 MB row groups of 100 segments: take whole groups,
+        # spread over the files (so over the voices and the songs), every second segment of each
+        groups = {}
+        for u in utts:
+            f, i = oc.SOURCES.get(u[0], ("", 0))
+            groups.setdefault((f, i // 100), []).append(u)
+        keys = sorted(groups)
+        pick = [keys[(j * len(keys)) // a.blocks + (j * 5) % max(1, len(keys) // a.blocks)] for j in range(a.blocks)]
+        utts = [u for k in dict.fromkeys(pick) for u in groups[k][::2]]
     if a.limit: utts = utts[:a.limit]
+    oc.fetch_audio(utts)
     unread = set(oc.unreadable(a.exe, [s.py for _, _, _, syls in utts for s in syls]))
     skipped = {"unreadable": 0, "no audio": 0, "render failed": 0}
     jobs = []

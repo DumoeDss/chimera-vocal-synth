@@ -8,6 +8,9 @@ melisma).
              durations|slur flags. Notes are names (E4, F#4/Gb4, rest); y and w are initials.
   M4Singer   meta.json, a list of {item_name, phs, is_slur, ph_dur, notes, notes_dur}. Notes are
              MIDI numbers (0: a rest); a syllable with no initial is its final alone (uo for wo).
+  ACE-Opencpop  data/*.parquet, a row a segment: Opencpop's segments and its annotation's times,
+             sung by 30 voices of a singing synthesizer (ACE Studio), the audio inside the row.
+             Notes carry their phonemes (z_ou; a slur is a note whose lyric is "—").
 """
 import json, math, os, subprocess, wave
 import numpy as np
@@ -88,10 +91,60 @@ def syllables(uid, ph, notes, dur, slur):
             out.append(Syllable("", p, t, t, t + dur[i], notes[i])); t += dur[i]; i += 1
     return [s for s in out if all(m > 0 for m, _, _ in s.parts)]  # a syllable on a rest has no pitch to sing
 
+SOURCES = {}  # ACE-Opencpop: id -> (parquet file, row), for `fetch_audio`
+
+def load_ace(root, files):
+    """ACE-Opencpop's rows -> utterances; the audio stays in the parquet files until `fetch_audio`.
+    Every voice sings the same notes, in a woman's range: all are sung on the female body."""
+    import pyarrow.parquet as pq
+    cache = os.path.join(root, "_wav")
+    out, bad = [], 0
+    for f in files:
+        t = pq.read_table(f, columns=["segment_id", "note_midi", "note_phns", "note_lyrics", "phn", "phn_start_time", "phn_end_time"]).to_pylist()
+        for i, r in enumerate(t):
+            ph, midi_, slur = r["phn"], [], []
+            for m, phns, lyric in zip(r["note_midi"], r["note_phns"], r["note_lyrics"]):
+                k = len(phns.split("_"))
+                midi_ += [int(round(m))] * k; slur += [1 if lyric == "—" else 0] * k
+            dur = [b - a for a, b in zip(r["phn_start_time"], r["phn_end_time"])]
+            try: syls = syllables(r["segment_id"], ph, midi_, dur, slur)
+            except ValueError: bad += 1; continue
+            if not syls: continue
+            SOURCES[r["segment_id"]] = (f, i)
+            out.append((r["segment_id"], os.path.join(cache, r["segment_id"].replace("#", "_") + ".wav"), "female", syls))
+    return out, bad
+
+def fetch_audio(utts):
+    """Write the recordings of these utterances out of ACE-Opencpop's parquet files (a no-op for a
+    corpus whose audio is already files). They go to <corpus>/_wav, beside the data, not here."""
+    need = {}
+    for uid, rec, _, _ in utts:
+        if uid in SOURCES and not os.path.exists(rec): need.setdefault(SOURCES[uid][0], []).append((SOURCES[uid][1], rec))
+    if not need: return
+    import pyarrow.parquet as pq
+    for f, rows in need.items():
+        os.makedirs(os.path.dirname(rows[0][1]), exist_ok=True)
+        pf = pq.ParquetFile(f)
+        # only the row groups that hold a wanted row are read (a file is 450 MB of audio)
+        starts, n = [], 0
+        for g in range(pf.num_row_groups):
+            starts.append(n); n += pf.metadata.row_group(g).num_rows
+        groups = {}
+        for i, rec in rows:
+            g = max(k for k, s0 in enumerate(starts) if s0 <= i)
+            groups.setdefault(g, []).append((i - starts[g], rec))
+        for g, wanted in groups.items():
+            col = pf.read_row_group(g, columns=["audio"]).column("audio")
+            for j, rec in wanted:
+                open(rec, "wb").write(col[j].as_py()["bytes"])
+
 def load(root):
     """A corpus folder -> [(id, wav path, voice, [Syllable])] and the lines that didn't parse.
     voice: "female" or "male", the body that sings it (M4Singer's tenors and basses are male)."""
     out, bad = [], 0
+    import glob
+    parquet = sorted(glob.glob(os.path.join(root, "data", "*.parquet")))
+    if parquet: return load_ace(root, parquet)
     meta = os.path.join(root, "meta.json")
     if os.path.exists(meta):
         for e in json.load(open(meta, encoding="utf-8")):
@@ -110,7 +163,7 @@ def load(root):
             except ValueError: bad += 1; continue
             if syls: out.append((uid, os.path.join(root, sub, "wavs", uid + ".wav"), "female", syls))
         return out, bad
-    raise SystemExit(f"neither meta.json (M4Singer) nor segments/transcriptions.txt (Opencpop) under {root}")
+    raise SystemExit(f"no meta.json (M4Singer), segments/transcriptions.txt (Opencpop) or data/*.parquet (ACE-Opencpop) under {root}")
 
 def melody(syls, contiguous=0.03):
     """The syllables as a `chimera render notes` melody on the recording's timeline: each vowel's
