@@ -98,6 +98,24 @@ fn calibrate_vowels_missing_changes_nothing_when_nothing_is_missing() {
     assert!(std::fs::read_to_string(&out).unwrap() == committed, "nothing missing: the file must not change");
 }
 
+/// `render notes --plan` says where the planner put each sound: the segments in time order, each
+/// vowel on its beat (tools/opencpop/compare.py measures a render by them).
+#[test]
+fn render_notes_plan_lists_the_planned_segments() {
+    let mel = tmp("plan-melody.json");
+    std::fs::write(&mel, r#"{"bpm":60,"t0":0.5,"lyrics":"ma1 ma1","notes":[[60,0.5],[62,0.5]]}"#).unwrap();
+    let plan = tmp("plan.json");
+    chimera(&["render", "notes", &mel, &tmp("plan-notes"), "male", "--plan", &plan]);
+    let j: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&plan).unwrap()).unwrap();
+    let segs = j["segments"].as_array().unwrap();
+    let field = |i: usize, k: &str| segs[i][k].clone();
+    assert_eq!((0..4).map(|i| field(i, "ipa")).collect::<Vec<_>>(), ["m", "a", "m", "a"]);
+    assert_eq!((0..4).map(|i| field(i, "kind")).collect::<Vec<_>>(), ["nasal", "vowel", "nasal", "vowel"]);
+    let t = |i: usize, k: &str| segs[i][k].as_f64().unwrap();
+    assert!((t(1, "t0") - 0.5).abs() < 1e-9 && (t(3, "t0") - 1.0).abs() < 1e-9, "the vowels are on their beats");
+    assert!((0..3).all(|i| t(i, "t1") <= t(i + 1, "t0") + 1e-9), "in time order");
+}
+
 /// `--missing` fits a vowel the file lacks and leaves every other entry as it was. An apical vowel
 /// is fitted with its tip and lips pinned even though [i], whose lips it takes, is not refitted
 /// (it came out unpinned, lips narrowed, with no word of it).

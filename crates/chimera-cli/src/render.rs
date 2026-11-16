@@ -516,10 +516,12 @@ fn render_tracked(v: &mut HumanVoice, out: &mut [f32], artic: bool, tele: bool) 
 /// A melody from a JSON file: `{"bpm", "lyrics", "notes": [[midi, beats], ...], "vibrato"?}`.
 /// One lyric syllable per sounding note; a note with midi <= 0 is a rest, which splits the
 /// melody into phrases planned separately on one voice.
-/// `render notes <in.json> <out> [body] [--artic tracks.json] [--tele voice.tele]`: `--artic` also
-/// writes the articulators over time (`{"rate", "body", "keys", "frames"}`), to animate a face in
-/// sync; `--tele` writes the voice's whole telemetry over time (see `TeleRecorder`), which the
-/// app's duet page replays on a 3D head. The melody file may give `"syllables"` (IPA
+/// `render notes <in.json> <out> [body] [--artic tracks.json] [--tele voice.tele] [--plan plan.json]`:
+/// `--artic` also writes the articulators over time (`{"rate", "body", "keys", "frames"}`), to
+/// animate a face in sync; `--tele` writes the voice's whole telemetry over time (see
+/// `TeleRecorder`), which the app's duet page replays on a 3D head; `--plan` writes the planned
+/// segments (`{"segments": [{"ipa", "t0", "t1", "kind"}]}`, on the render's timeline), for a
+/// comparison that needs to know where each sound was put. The melody file may give `"syllables"` (IPA
 /// onset/nucleus/coda per sounding note, optional `"pitch"` bends) instead of `"lyrics"`: a
 /// language front end's output (docs/language-front-ends.md). Optional sing-planner settings:
 /// `"nasalLead"`, `"consonantScale"`, `"bendStrength"` (0, the default: the melody as written; 1:
@@ -527,6 +529,7 @@ fn render_tracked(v: &mut HumanVoice, out: &mut [f32], artic: bool, tele: bool) 
 pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let mut artic_out: Option<String> = None;
     let mut tele_out: Option<String> = None;
+    let mut plan_out: Option<String> = None;
     let mut rest = Vec::new();
     let mut it = a.iter();
     while let Some(x) = it.next() {
@@ -534,12 +537,14 @@ pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
             artic_out = Some(it.next().ok_or("--artic needs a file")?.clone());
         } else if x == "--tele" {
             tele_out = Some(it.next().ok_or("--tele needs a file")?.clone());
+        } else if x == "--plan" {
+            plan_out = Some(it.next().ok_or("--plan needs a file")?.clone());
         } else {
             rest.push(x.clone());
         }
     }
     let a = &rest[..];
-    let input = a.first().ok_or("render notes <in.json> <out> [male|female|child] [--artic tracks.json] [--tele voice.tele]")?;
+    let input = a.first().ok_or("render notes <in.json> <out> [male|female|child] [--artic tracks.json] [--tele voice.tele] [--plan plan.json]")?;
     let out_name = wav_name(arg(a, 1, "out/notes"));
     let body_name = arg(a, 2, "male");
     let b = body(body_name)?;
@@ -574,13 +579,15 @@ pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     let (mut t, mut k, mut end) = (t0, 0usize, 0.0f64);
     let mut phrase: Vec<SungNote> = Vec::new();
     let mut start = t;
-    let flush = |phrase: &mut Vec<SungNote>, start: f64, v: &mut HumanVoice, end: &mut f64| {
+    let mut planned: Vec<chimera::phonetics::PlannedSegment> = Vec::new();
+    let mut flush = |phrase: &mut Vec<SungNote>, start: f64, v: &mut HumanVoice, end: &mut f64| {
         if phrase.is_empty() {
             return;
         }
         let plan = plan_song(phrase, &SongOptions { body: body_name.into(), bpm, t0: start, vibrato, nasal_lead: j["nasalLead"].as_f64(), consonant_scale: j["consonantScale"].as_f64(), bend_strength: j["bendStrength"].as_f64() });
         v.schedule(&plan.gestures);
         *end = js_max(*end, plan.end);
+        planned.extend(plan.segments);
         phrase.clear();
     };
     for n in &raw {
@@ -614,6 +621,10 @@ pub fn notes(ctx: &Ctx, a: &[String]) -> Result<(), String> {
     if let (Some(path), Some(r)) = (&tele_out, rec) {
         std::fs::write(path, r.bytes(body_mix(body_name)?)).map_err(|e| format!("{path}: {e}"))?;
         println!("{path}: {} telemetry frames every {TELE_HOP} samples", r.frames);
+    }
+    if let Some(path) = &plan_out {
+        std::fs::write(path, serde_json::json!({"segments": planned}).to_string()).map_err(|e| format!("{path}: {e}"))?;
+        println!("{path}: {} planned segments", planned.len());
     }
     Ok(())
 }
