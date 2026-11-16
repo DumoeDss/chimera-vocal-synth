@@ -1,7 +1,8 @@
 //! Mandarin's u (乌 wu, 虎 hu, the medial of 话 hua and 朵 duo) is not English's /u/. Beijing
 //! speakers' u has F2 ~660 Hz (Zee & Lee 2001, doi 10.21437/Eurospeech.2001-169: 345 / 661 Hz
 //! F1 / F2, men), English "who'd" ~1000 Hz (Hillenbrand et al. 1995). The front end used to
-//! sing the English vowel, which a native listener hears as a foreign accent. Mandarin gets its
+//! sing the English vowel (a native speaker still heard a foreigner in the singing, and this was
+//! its largest measured distance from Beijing speakers' vowels). Mandarin gets its
 //! own table entry, `u̠` (u + U+0320), that no English, Korean, Japanese or IPA-lyrics text reaches.
 use chimera::analysis::lpc::{FormantOpts, estimate_formants};
 use chimera::anatomy::human::{BODY_FEMALE, BODY_MALE, HumanBody};

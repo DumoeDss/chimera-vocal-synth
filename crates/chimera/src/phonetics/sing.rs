@@ -62,7 +62,8 @@ const OFFGLIDE: f64 = 0.2;
 /// or the tongue fronts while the consonant is made), and the main vowel carries the beat. Sung on
 /// the beat as a vowel of its own (up to 120 ms, a quarter of the vowel) it was a plateau: the jaw
 /// and tongue sat at the glide's posture for 80-100 ms and the main vowel was 90% reached 200 ms
-/// after the beat, so a native listener heard 两 as li-ang, 快 as ku-ai. As an onset consonant
+/// after the beat, and listening diagnoses of the renders heard 两 as li-ang, 快 as ku-ai (language
+/// models, asked after a native speaker called the singing a foreigner's). As an onset consonant
 /// before the consonants (the design before that) the glide was lost to the recogniser (话 hua
 /// toward 哈 ha); it follows the initial, so it keeps its own time, and is a vowel segment, so it
 /// takes the Öhman coarticulation of a vowel rather than a consonant's constriction.

@@ -123,24 +123,34 @@ tones drawn as held bends and the endings held; the scramble test has not been r
 
 ### By a native speaker's ear
 
-A native Mandarin speaker listened to the front end above, one round at a time, and heard "a
-foreigner speaking Chinese". Each report was measured in the render (level, LPC formants, the
-articulator tracks, the pitch) and fixed in the front end or in what a front end can ask of the
-singer. English, Korean and Russian plan exactly as before (the goldens are untouched). Two
-things are not opt-in: any rising nucleus sings its glide before the beat, and any syllable's
-bends wait for `bendStrength`; only the Mandarin front end writes either.
+A native Mandarin speaker listened to the front end above, and again after each round of changes.
+Their reports, in order:
 
-| Heard | Measured | Now | Test |
-|---|---|---|---|
-| 两 as *li-ang*, 快 as *ku-ai* | the medial sat on the beat for 80-100 ms; the main vowel 90% reached 200 ms after it | a 50 ms glide ending on the beat; 80-90 ms | `medials.rs` |
-| the tones recited over the tune | every 2nd and 3rd tone scooped up from 3.5-4 semitones below, every 4th dropped 4 at its end | a song follows its melody unless it asks for tones | `bends.rs` |
-| 二, 耳 as English "er" | /ɝ/ held still | a central vowel moving into the r-colouring, 二 more open | `er.rs` |
-| 只 as zhu, zhe or zhi | ɿ ʅ fitted to formants alone: lips narrowed to 0.2, no tongue tip | the sibilant's tip held open, lips spread, by the calibrator | `apical.rs` |
-| u and ong "English" | F2 997 and 1126 Hz (men); Beijing speakers' are 661 and 730 (Zee & Lee 2001) | `u̠` 649 Hz, `ʊ̠` 765 Hz | `mandarin_u.rs`, `mandarin_ong.rs` |
-| every compound and nasal rhyme as two sounds: "ang is an + ng" | 奥 for 1.33 s: [a] still 0.76 s, a jump, [ʊ] still 0.35 s. 昂: an oral [ɑ], a 40 ms jump of the tongue body, 0.4 s of murmur. A phrase's last -n let go into a vowel | one movement into the ending over the note's last 0.2 s at most; the velum lowers gradually; the tongue body approaches the coda's place; a final coda stays closed | `mandarin_rhymes.rs` |
-| every single syllable "a second tone" | with tones on, 2 and 3 were one shape (low, then a jump to the note) | each tone its own contour through the syllable | `mandarin_tones.rs` |
+1. The singing sounds like a foreigner speaking Chinese.
+2. After the first four rows below: a little better, still a foreigner, heard at once.
+3. Every compound and nasal rhyme is two sounds where Mandarin has one, "ang comes out as an +
+   ng", and they are all drawn out.
+4. After that row: much better, it is one sound now; but single syllables all sound like a second
+   tone.
 
-The same listener's verdict on the result: clearly better, and still not a native speaker. What is
+The first report named no sound, so the renders were given to language models to say what they
+heard ("model" below), and what they named was measured. Everything was measured in
+the render (level, LPC formants, the articulator tracks, the pitch) and fixed in the front end or
+in what a front end can ask of the singer. English, Korean and Russian plan exactly as before (the
+goldens are untouched). Two things are not opt-in: any rising nucleus sings its glide before the
+beat, and any syllable's bends wait for `bendStrength`; only the Mandarin front end writes either.
+
+| Reported | By | Measured | Now | Test |
+|---|---|---|---|---|
+| 两 as *li-ang*, 快 as *ku-ai* | model | the medial sat on the beat for 80-100 ms; the main vowel 90% reached 200 ms after it | a 50 ms glide ending on the beat; 80-90 ms | `medials.rs` |
+| the tones laid over the tune | model | every 2nd and 3rd tone scooped up from 3.5-4 semitones below, every 4th dropped 4 at its end | a song follows its melody unless it asks for tones | `bends.rs` |
+| 二, 耳 as an American "er" | model | /ɝ/ held still | a central vowel moving into the r-colouring, 二 more open | `er.rs` |
+| 只 as zhu, zhe or zhi | model | ɿ ʅ fitted to formants alone: lips narrowed to 0.2, no tongue tip | the sibilant's tip held open, lips spread, by the calibrator | `apical.rs` |
+| still a foreigner (report 2) | native speaker | the largest distance from Beijing speakers' vowels: u and ong's F2 997 and 1126 Hz (men) against 661 and 730 (Zee & Lee 2001) | `u̠` 649 Hz, `ʊ̠` 765 Hz | `mandarin_u.rs`, `mandarin_ong.rs` |
+| every compound and nasal rhyme two sounds: "ang is an + ng" (report 3) | native speaker | 奥 for 1.33 s: [a] still 0.76 s, a jump, [ʊ] still 0.35 s. 昂: an oral [ɑ], a 40 ms jump of the tongue body, 0.4 s of murmur. A phrase's last -n let go into a vowel | one movement into the ending over the note's last 0.2 s at most; the velum lowers gradually; the tongue body approaches the coda's place; a final coda stays closed | `mandarin_rhymes.rs` |
+| every single syllable "a second tone" (report 4) | native speaker | each was one flat note (no tone is drawn by default); and with tones on, 2 and 3 were one shape (low, then a jump to the note) | each tone its own contour through the syllable | `mandarin_tones.rs` |
+
+The same listener's verdict on the result: much improved, and still not a native speaker. What is
 known to be wrong, with where it was measured:
 
 - **Vowel qualities still lean English.** Against Zee & Lee's means for Beijing speakers: a's F1
@@ -177,7 +187,7 @@ Every front end writes the same thing, one sung syllable per sounding note:
   the second vowel holds from the beat; triphthongs (iaʊ iəʊ uaɪ ueɪ, and iaʊ̠ iəʊ̠ u̠aɪ u̠eɪ) do both. The glide is not held
   on the beat: sung there as a vowel of its own (it was a quarter of the vowel, at most 120 ms) the
   jaw and tongue sat at its posture for 80-100 ms and the main vowel was 90% reached 200 ms after
-  the beat, so a native listener heard 两 as *li-ang* and 快 as *ku-ai*. Now it is 90% reached
+  the beat, and listening diagnoses of the renders heard 两 as *li-ang* and 快 as *ku-ai*. Now it is 90% reached
   80-90 ms after the beat (50 ms without a medial), `tests/medials.rs`. The apical vowels ɿ ʅ are
   calibrated vowels too.
 - A consonant may say its sung `"dur"` (s); unsaid, its spoken length × 0.8.
@@ -233,10 +243,10 @@ tone's level:
 **A song draws bends only as strongly as it asks**: `SongOptions::bend_strength`, `"bendStrength"`
 in a melody file. The default is 0, the melody as written; 1 draws them as the front end wrote
 them; in between scales their semitones. Nothing in the app sets it yet (`planSong` takes
-`bendStrength`), so the app sings no tone. Drawn by default, a native speaker heard "a foreigner
-reciting the tones while singing": in sung Mandarin the melody overrides the lexical tone, and the
-words and the context carry it. The recogniser preferred the bends (the table above), the ear did
-not.
+`bendStrength`), so the app sings no tone. Drawn by default they were what the listening diagnoses
+of the demo song named first (scoops and a fall laid over the tune): in sung Mandarin the melody
+overrides the lexical tone, and the words and the context carry it. The recogniser preferred the
+bends (the table above), the listeners did not.
 
 ## Adding a language
 
