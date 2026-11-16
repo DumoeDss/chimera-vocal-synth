@@ -75,16 +75,39 @@ const MEDIAL_GLIDE: f64 = 0.05;
 /// own: 奥 ao sung for 1.3 s was [a] still for 0.76 s, a jump in 80 ms, then [ʊ] still for 0.35 s,
 /// and 昂 ang was an oral [ɑ], a 40 ms jump of the tongue body, then 0.4 s of murmur: a native
 /// listener heard two sounds (a-u, an-ng) where Mandarin has one.
-const CLOSING_SHARE: f64 = 0.6;
+const CLOSING_SHARE: f64 = 0.55;
+/// A closing rhyme's nasal coda is this share of the rhyme (the vowel and the coda), within these
+/// bounds (s): singers' codas grow with the note, about an eighth of it, where a coda of a fixed
+/// 70-80 ms was twice theirs on a short note.
+const CLOSING_CODA_SHARE: f64 = 0.11;
+const CLOSING_CODA_MIN: f64 = 0.025;
+const CLOSING_CODA_MAX: f64 = 0.11;
+/// A phrase's last closing rhyme fades, as singers' last notes do whatever their length: gently
+/// from 40% of the way through it (about 3 dB down at 65%, 5 dB at 75%), then away over its last
+/// fifth (10 dB at 85%, 25 dB at 95%). Two breath targets against the phrase's own (strength 1,
+/// level 1): a gentle one reached at FADE_AT of the rhyme, and a release over its last FADE_OUT.
+const FADE_FROM: f64 = 0.4;
+const FADE_AT: f64 = 0.8;
+const FADE_LEVEL: f64 = 0.3;
+const FADE_STRENGTH: f64 = 1.0;
+const FADE_OUT: f64 = 0.24;
+const FADE_OUT_LEVEL: f64 = 0.1;
+const FADE_OUT_STRENGTH: f64 = 5.0;
 /// In a closing rhyme the tongue body is this far on its way to a velar coda when the coda closes
 /// (its strength against the vowel's 1.0: 1.2 is 55 % of the way), over this long at most (s). The
 /// dorsum is slow, so -ng is heard in the vowel's last 150 ms before the closure.
-const CLOSING_VELAR: f64 = 1.2;
-const CLOSING_APPROACH_MAX: f64 = 0.15;
+const CLOSING_VELAR: f64 = 2.0;
+/// The approach to a coda and the nasalising before it take this share of the vowel, and this long
+/// at most (s).
+const CLOSING_APPROACH_SHARE: f64 = 0.6;
+const CLOSING_APPROACH_MAX: f64 = 0.45;
+/// The tongue tip on its way to an alveolar coda: no vowel holds the tip (only the articulators'
+/// rest weight, 0.05), so a small strength takes it part of the way (0.08: 60 % at the closure).
+const CLOSING_TIP: f64 = 0.15;
 /// And toward an alveolar coda the tongue body fronts and rises (the body posture of an alveolar
 /// closure, as `oral_gestures` holds it during one), 0.6: 37 % of the way. This is what tells -n
 /// from -ng before the closure: 安 an's vowel ends fronted ([aɛ̃n], F2 rising), 昂 ang's backed.
-const CLOSING_ALVEOLAR: f64 = 0.6;
+const CLOSING_ALVEOLAR: f64 = 1.0;
 
 /// a sung vowel keeps at least this long when a short note squeezes its consonants (s)
 const MIN_VOWEL: f64 = 0.05;
@@ -235,7 +258,9 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         let mut nasal_spans: Vec<(f64, f64, f64, &str)> = Vec::new();
         // (vowel start, vowel end, fraction nasalised, the tongue body's approach to the coda) of
         // closing rhymes
-        let mut closing_spans: Vec<(f64, f64, f64, Option<(f64, Targets)>)> = Vec::new();
+        let mut closing_spans: Vec<(f64, f64, f64, Vec<(f64, Targets)>)> = Vec::new();
+        // the phrase's last rhyme, when it is a closing one: (its start, its end), for the fade
+        let mut final_rhyme: Option<(f64, f64)> = None;
         // a closing rhyme's nasal coda that ends the phrase: (its end, the closure it holds)
         let mut final_coda: Option<(f64, Targets)> = None;
         // each note's onset and coda consonants, at the note's pitch (a coda at the pitch of the
@@ -289,10 +314,18 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             let n = &notes[k];
             let hz = hz_of(k);
             let next_melisma = k < j && melisma(&notes[k + 1].syl);
-            let coda = std::mem::take(&mut codas[k - i]);
+            let mut coda = std::mem::take(&mut codas[k - i]);
             let onset = std::mem::take(&mut onsets[k - i]);
             // vowel from this note's beat to the next note's onset (less this note's coda)
             let note_end = if k < j { times[k + 1] - total(&onsets[k + 1 - i]) } else { last_end };
+            // a closing rhyme's nasal coda is a share of the rhyme, not a length of its own
+            let closes = last_of_chain(notes, k).closing.is_some_and(|c| c > 0.0);
+            if closes && coda.len() == 1 && matches!(coda[0].ipa.as_str(), "m" | "n" | "ŋ") {
+                coda[0].dur = Some(js_max(CLOSING_CODA_MIN, js_min(CLOSING_CODA_MAX, CLOSING_CODA_SHARE * (note_end - times[k]))));
+            }
+            if closes && k == j {
+                final_rhyme = Some((times[k], note_end));
+            }
             // only consonants squeezed to their floor can leave less than MIN_VOWEL
             let vdur = js_max(0.02, note_end - times[k] - total(&coda));
             segs.extend(onset);
@@ -368,14 +401,14 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             // the vowel (strength 2 follows the ramp itself, see Articulators) instead of dropping
             // at its start, and the tongue body is on its way to a velar coda before it closes
             for (a, b, lead, approach) in closing_spans {
-                let len = js_min(lead * (b - a), 0.25);
+                let len = js_min(lead * (b - a), CLOSING_APPROACH_MAX);
                 if len > 0.0 {
                     // open before the coda's closure starts (~55 ms ahead of b): a close vowel that
                     // closed first was a stop for a moment (东 dong dipped 9 dB before its -ng)
                     gestures.push(Gesture::new(b - 0.06, b + 0.02, len, 0.03, 2.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
                 }
-                if let Some((pull, t)) = approach {
-                    let len = js_min(CLOSING_APPROACH_MAX, 0.5 * (b - a));
+                for (pull, t) in approach {
+                    let len = js_min(CLOSING_APPROACH_MAX, CLOSING_APPROACH_SHARE * (b - a));
                     gestures.push(Gesture::new(b - 0.01, b + 0.02, len, 0.03, pull, t).label("coda approach"));
                 }
             }
@@ -391,6 +424,12 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
                 gestures.push(Gesture::new(t - 0.03, t + held, 0.02, release, 40.0, hold).label("coda held"));
                 gestures.push(Gesture::new(t - 0.03, t + velum, 0.02, 0.05, 4.0, Targets::default().with(ArticKey::Velum, 0.45)).label("velum"));
             }
+            // the phrase's last rhyme fades, as a singer's does before a breath
+            if let Some((a, b)) = final_rhyme {
+                let r = b - a;
+                gestures.push(Gesture::new(a + FADE_AT * r, b + 0.05, (FADE_AT - FADE_FROM) * r, 0.05, FADE_STRENGTH, Targets::default().with(ControlKey::BREATH, FADE_LEVEL)).label("fade"));
+                gestures.push(Gesture::new(b - 0.005, b + 0.05, FADE_OUT * r, 0.05, FADE_OUT_STRENGTH, Targets::default().with(ControlKey::BREATH, FADE_OUT_LEVEL)).label("fade"));
+            }
             for (a, b) in vowel_spans {
                 if b - a > 0.3 {
                     gestures.push(vibrato_gesture(a, b, o.vibrato, None));
@@ -405,7 +444,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
 
 /// Where the tongue body heads in a closing rhyme's vowel before its nasal coda closes, and how
 /// strongly against the vowel (see [`CLOSING_VELAR`], [`CLOSING_ALVEOLAR`]).
-fn coda_approach(coda: &str, vowel: &str, body: BodyMix) -> Option<(f64, Targets)> {
+fn coda_approach(coda: &str, vowel: &str, body: BodyMix) -> Vec<(f64, Targets)> {
     let v = vowel_artic(vowel, body);
     let at = |k: ArticKey| v.as_ref().and_then(|v| v.get(k));
     match coda {
@@ -423,10 +462,14 @@ fn coda_approach(coda: &str, vowel: &str, body: BodyMix) -> Option<(f64, Targets
             if back {
                 t = t.with(ArticKey::TbX, 2.83);
             }
-            (rise || back).then_some((CLOSING_VELAR, t))
+            if rise || back { vec![(CLOSING_VELAR, t)] } else { Vec::new() }
         }
-        "n" => Some((CLOSING_ALVEOLAR, Targets::default().with(ArticKey::TbX, 3.2).with(ArticKey::TbY, 7.4))),
-        _ => None,
+        "n" => {
+            let mut out = vec![(CLOSING_ALVEOLAR, Targets::default().with(ArticKey::TbX, 3.2).with(ArticKey::TbY, 7.4))];
+            out.extend(closure("n", body).map(|tip| (CLOSING_TIP, tip)));
+            out
+        }
+        _ => Vec::new(),
     }
 }
 

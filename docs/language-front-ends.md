@@ -82,7 +82,11 @@ data, `tools/build-mandarin.ts`), longest phrase first: 银行 is yín háng, �
   ou [əʊ̠].
 - **Rhymes close in one movement:** the off-glide of ai ei ao ou, and -n / -ng, are where the vowel
   ends up at the end of the note, not a part held after it (`closing`, below).
-- **Timing:** j zh z with short frication, n m f long enough to hear, -n 70 ms and -ng 80 ms.
+- **Timing:** every initial has its own sung length and aspiration 60 ms (`onset_dur`), set so
+  that the voice starts as long after the consonant begins as singers' does: between the medians
+  of two annotated singing corpora where they differ (stops and affricates), on them where they
+  agree (fricatives, nasals, l and r). The fricatives had been two thirds of a singer's, l and r
+  half. See [opencpop-comparison.md](opencpop-comparison.md).
 - **Erhua:** 一点儿 sings 一 + 点儿, one syllable ending in ɻ; a 儿 that is a word's own syllable
   (女儿, 儿子) stays one.
 - **A vowel-initial syllable** (爱, 安) starts with a soft glottal catch, so it doesn't run into the
@@ -193,14 +197,20 @@ Every front end writes the same thing, one sung syllable per sounding note:
 - `pitch`: bends at the note's start, middle or end (below).
 - `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: none).
 - `closing`: the rhyme's ending is one closing movement at the end of the note, this long at most
-  (seconds; Mandarin says 0.2), instead of a part of its own. A falling off-glide then takes at
-  most that long and at most 60% of the vowel, half of it the glide coming in and half the vowel
-  letting go, so neither is held. Before a nasal coda the velum lowers gradually over the
-  nasalised part and is open 60 ms before the closure (later, 东's close vowel was a stop for a
-  moment), the tongue body moves toward the coda over the vowel's last 150 ms (up for -ng, back
-  from a front vowel, forward and up for -n: what tells 安 from 昂 before the closure), and a
-  phrase's last coda stays closed until the voice has faded. Unsaid: the off-glide holds the last
-  20% of the note and the coda is a consonant after the vowel.
+  (seconds; Mandarin says 0.5), instead of a part of its own. Singers' endings are a share of the
+  note, whatever its length, and so are these:
+  - a falling off-glide takes the vowel's last 55% (at most `closing`), half of it the glide
+    coming in and half the vowel letting go, so neither is held;
+  - a nasal coda is 11% of the rhyme (between 25 and 110 ms), not a length of its own: at a fixed
+    70-80 ms it was twice a singer's on a short note;
+  - before it the velum lowers gradually over the nasalised part and is open 60 ms before the
+    closure (later, 东's close vowel was a stop for a moment), and the tongue moves toward the coda
+    over the vowel's last 60% (the body up for -ng, back from a front vowel, forward and up for
+    -n, with the tip on its way: what tells 安 from 昂 before the closure);
+  - a phrase's last rhyme fades as singers' do before a breath (about 3 dB down at 65% of the
+    way through it, 5 dB at 75%, then away), and its coda stays closed until the voice has gone.
+  Unsaid: the off-glide holds the last 20% of the note, the coda is a consonant after the vowel,
+  and the note holds its level to its end.
 - A melisma note is `"melisma": true` with the same nucleus; its coda moves to the run's last note.
 - `text` is what the lyrics panel and the piano roll show.
 - `wordEnd` and `phraseEnd` may be left out (false).

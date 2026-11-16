@@ -55,7 +55,7 @@ fn formants(out: &[f32], t: f64) -> (f64, f64) {
 #[test]
 fn the_front_end_marks_its_rhymes_closing_and_its_codas_short() {
     for py in ["ao1", "ang1", "an1", "ma1"] {
-        assert_eq!(mandarin(py).closing, Some(0.2), "{py}");
+        assert_eq!(mandarin(py).closing, Some(0.5), "{py}");
     }
     assert_eq!(mandarin("ang1").coda[0].dur, Some(0.08));
     assert_eq!(mandarin("an1").coda[0].dur, Some(0.07));
@@ -65,45 +65,47 @@ fn the_front_end_marks_its_rhymes_closing_and_its_codas_short() {
 fn a_long_ao_holds_its_a_and_glides_only_at_the_end() {
     let secs = 1.33;
     let p = plan(mandarin("ao1"), secs);
-    // the off-glide is a short last part, coming in over its own length: no second held vowel
+    // the off-glide is the last part of one movement of at most half a second, coming in over its
+    // own length: no second held vowel
     let glide = p.segments.iter().find(|s| s.ipa == "ʊ\u{320}").expect("the off-glide");
-    assert!(glide.t1 - glide.t0 <= 0.101, "the off-glide is held {:.3} s", glide.t1 - glide.t0);
+    assert!(glide.t1 - glide.t0 <= 0.251, "the off-glide is held {:.3} s", glide.t1 - glide.t0);
     let g = p.gestures.iter().find(|g| g.label_str() == "ʊ\u{320}").unwrap();
-    assert!(g.ramp_in >= 0.099, "the off-glide comes in over {:.3} s", g.ramp_in);
-    // heard: 0.3 s before the note ends it is still [a] (it was [ʊ], F2 ~780), and it has moved by the end
+    assert!(g.ramp_in >= glide.t1 - glide.t0 - 1e-9, "the off-glide comes in over {:.3} s", g.ramp_in);
+    // heard: 0.6 s before the note ends it is still [a], and it has moved by the end (held as a
+    // second vowel it was [ʊ], F2 ~780, for the last 0.35 s)
     let out = render(&p, secs, FS);
     let end = BEAT_AT + secs - 0.05;
-    let (_, still_a) = formants(&out, end - 0.3);
-    let (_, closed) = formants(&out, end - 0.03);
-    assert!(still_a > 1250.0, "0.3 s before the end F2 is {still_a:.0}");
-    assert!(closed < 1150.0, "at the end F2 is {closed:.0}");
+    let (_, still_a) = formants(&out, end - 0.6);
+    let (_, closed) = formants(&out, end - 0.05);
+    assert!(still_a > 1250.0, "0.6 s before the end F2 is {still_a:.0}");
+    assert!(closed < still_a - 200.0, "at the end F2 is {closed:.0}, from {still_a:.0}");
 }
 
 #[test]
 fn a_short_note_keeps_some_of_its_main_vowel() {
-    // 0.3 s: the movement takes at most 60 % of the vowel
+    // 0.3 s: the movement takes 55 % of the vowel, half of it the glide's own part
     let p = plan(mandarin("ai1"), 0.3);
     let v: Vec<_> = p.segments.iter().filter(|s| s.kind == "vowel").collect();
     assert_eq!(v.len(), 2);
     let (held, glide) = (v[0].t1 - v[0].t0, v[1].t1 - v[1].t0);
-    assert!((glide - 0.3 * (held + glide)).abs() < 1e-9, "held {held:.3}, glide {glide:.3}");
+    assert!((glide - 0.275 * (held + glide)).abs() < 1e-9, "held {held:.3}, glide {glide:.3}");
 }
 
 #[test]
-fn a_long_ang_is_a_vowel_until_its_last_fifth_of_a_second() {
+fn a_long_ang_is_a_vowel_until_it_moves_into_its_ng() {
     let secs = 1.33;
     let p = plan(mandarin("ang1"), secs);
     let out = render(&p, secs, FS);
     let end = BEAT_AT + secs - 0.05;
-    let vowel = level(&out, BEAT_AT + 0.4);
-    // 0.3 s before the end it was already the murmur (10 dB down, F1 ~440)
-    let late = level(&out, end - 0.3);
-    let (f1, _) = formants(&out, end - 0.3);
-    assert!(late > vowel - 3.0, "0.3 s before the end the level is {:.1} dB under the vowel's", vowel - late);
-    assert!(f1 > 600.0, "0.3 s before the end F1 is {f1:.0}");
+    let vowel = level(&out, BEAT_AT + 0.3);
+    // half-way through it is the vowel (the murmur began 0.4 s before the end: 10 dB down, F1 ~440)
+    let mid = level(&out, BEAT_AT + 0.64);
+    let (f1, _) = formants(&out, BEAT_AT + 0.64);
+    assert!(mid > vowel - 3.0, "half-way the level is {:.1} dB under the vowel's", vowel - mid);
+    assert!(f1 > 600.0, "half-way F1 is {f1:.0}");
     // and it still closes into the -ng
-    let murmur = level(&out, end - 0.04);
-    let (f1, _) = formants(&out, end - 0.04);
+    let murmur = level(&out, end - 0.06);
+    let (f1, _) = formants(&out, end - 0.06);
     assert!(murmur < vowel - 4.0, "the murmur is {:.1} dB under the vowel", vowel - murmur);
     assert!(f1 < 560.0, "the murmur's F1 is {f1:.0}");
     // the velum comes down over the nasalised part instead of dropping at its start, and the
@@ -142,6 +144,42 @@ fn a_phrase_final_n_is_not_released_into_a_vowel() {
         let t = end - 0.02 + 0.02 * k as f64;
         assert!(level(&out, t) < murmur + 1.0, "{:.0} ms after the coda's end the level is {:.1} dB over the murmur", (t - end) * 1000.0, level(&out, t) - murmur);
     }
+}
+
+#[test]
+fn a_nasal_coda_is_a_share_of_its_rhyme() {
+    // singers' codas grow with the note, about an eighth of the rhyme; a fixed 70-80 ms was twice
+    // theirs on a short note
+    let coda = |secs: f64| {
+        let p = plan(mandarin("ang1"), secs);
+        let c = p.segments.iter().find(|s| s.ipa == "ŋ").unwrap();
+        let v = p.segments.iter().find(|s| s.kind == "vowel").unwrap();
+        ((c.t1 - c.t0), (c.t1 - v.t0))
+    };
+    let (short, rhyme) = coda(0.3);
+    assert!((short - 0.11 * rhyme).abs() < 1e-9 && short < 0.035, "0.3 s: a coda of {short:.3} s in a rhyme of {rhyme:.3}");
+    let (long, _) = coda(1.33);
+    assert!((long - 0.11).abs() < 1e-9, "1.33 s: {long:.3}");
+    let (tiny, _) = coda(0.12);
+    assert!((tiny - 0.025).abs() < 1e-9, "0.12 s: {tiny:.3}");
+}
+
+#[test]
+fn a_phrases_last_note_fades_and_one_inside_it_does_not() {
+    // singers' last notes fall from half-way through: about 3 dB by 65 %, 5 dB by 75 %; inside a
+    // phrase a note stays level. The voice held its level to the end of every note.
+    let ma = || mandarin("ma1");
+    let alone = render(&plan(ma(), 0.8), 0.8, FS);
+    let rhyme = 0.75; // the note less the 50 ms the phrase leaves for a breath
+    let drop = |out: &[f32], at: f64| level(out, BEAT_AT + 0.3 * rhyme) - level(out, BEAT_AT + at * rhyme);
+    assert!((1.5..5.5).contains(&drop(&alone, 0.65)), "at 65 %: {:.1} dB down", drop(&alone, 0.65));
+    assert!((3.0..8.0).contains(&drop(&alone, 0.75)), "at 75 %: {:.1} dB down", drop(&alone, 0.75));
+    let two = plan_song(
+        &[SungNote { midi: 45.0, beats: 0.8, syl: ma() }, SungNote { midi: 45.0, beats: 0.8, syl: ma() }],
+        &SongOptions { body: "male".into(), bpm: 60.0, t0: BEAT_AT, vibrato: 0.0, ..Default::default() },
+    );
+    let inside = render(&two, 1.6, FS);
+    assert!(drop(&inside, 0.75).abs() < 2.0, "inside the phrase, at 75 %: {:.1} dB down", drop(&inside, 0.75));
 }
 
 #[test]

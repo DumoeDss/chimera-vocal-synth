@@ -178,7 +178,7 @@ const NASAL_LEAD: f64 = 0.6;
 /// A rhyme's ending (the off-glide of ai ei ao ou, a nasal coda) is one closing movement at the end
 /// of the syllable, this long at most (s): Mandarin's 韵尾 is where the vowel ends up, not a second
 /// sound (`Syllable::closing`).
-const CLOSING: f64 = 0.2;
+const CLOSING: f64 = 0.5;
 
 /// Mandarin's sung timing: a nasal coda is a short murmur at the end of a closing rhyme. The place
 /// cue is in the vowel's last formant movement (the song planner moves the tongue body toward the
@@ -196,16 +196,27 @@ fn coda_dur(ipa: &str) -> Option<f64> {
 /// frication short (j heard as q), nasal onsets long enough to hear (n heard as y), f long enough
 /// to tell from sh.
 fn onset_dur(ipa: &str, aspirated: Option<bool>) -> Option<f64> {
-    match (ipa, aspirated) {
-        ("tɕ" | "tʂ" | "ts", Some(false)) => Some(0.08),
-        ("n" | "m", _) => Some(0.09),
-        ("f", _) => Some(0.13),
-        _ => None,
-    }
+    Some(match (ipa, aspirated) {
+        ("p" | "t" | "k", Some(true)) => 0.05,
+        ("tɕ", Some(true)) => 0.10,
+        ("tʂ", Some(true)) => 0.08,
+        ("ts", Some(true)) => 0.076,
+        ("tɕ", Some(false)) => 0.105,
+        ("tʂ" | "ts", Some(false)) => 0.097,
+        ("f", _) => 0.118,
+        ("s", _) => 0.136,
+        ("ʂ", _) => 0.147,
+        ("ɕ", _) => 0.15,
+        ("x", _) => 0.108,
+        ("l", _) => 0.092,
+        ("ɻ" | "n", _) => 0.097,
+        ("m", _) => 0.106,
+        _ => return None,
+    })
 }
 
 /// Aspiration length of Mandarin's aspirated stops and affricates (s).
-const MANDARIN_VOT: f64 = 0.09;
+const MANDARIN_VOT: f64 = 0.06;
 
 /// An initial → its sound and, for stops and affricates, its aspiration.
 fn initial(i: &str) -> Option<(&'static str, Option<bool>)> {

@@ -118,7 +118,7 @@ fn accented_english_words_stay_english() {
 #[test]
 fn the_front_end_says_aspiration_length_and_nasalisation() {
     let s = syls("跑的天");
-    assert_eq!(s[0].onset[0].vot, Some(0.09)); // aspirated: Mandarin's long aspiration
+    assert_eq!(s[0].onset[0].vot, Some(0.06)); // aspirated: Mandarin's aspiration, a little over English's
     assert_eq!(s[1].onset[0].vot, None); // unaspirated
     assert!(s[2].nasal_lead.is_some()); // tiān: nasalised before -n
     assert_eq!(s[0].nasal_lead, None);
@@ -153,10 +153,10 @@ fn mandarin_timing_and_vowels() {
     // nasal codas a short murmur at the end of the rhyme (tests/mandarin_rhymes.rs)
     assert_eq!(dur(&s[0].coda), [Some(0.08)]);
     assert_eq!(dur(&s[1].coda), [Some(0.07)]);
-    // nasal onsets and f longer; an unaspirated affricate's frication shorter
-    assert_eq!(s[2].onset[0].dur, Some(0.09));
-    assert_eq!(s[3].onset[0].dur, Some(0.13));
-    assert_eq!(s[4].onset[0].dur, Some(0.08));
+    // initials as long as singers hold them (onset_dur): n, f, an unaspirated j
+    assert_eq!(s[2].onset[0].dur, Some(0.097));
+    assert_eq!(s[3].onset[0].dur, Some(0.118));
+    assert_eq!(s[4].onset[0].dur, Some(0.105));
     // Mandarin's own vowels: eng back [ɤŋ], uo open [u̠ɔ], ou central [əʊ̠], iao one three-part nucleus
     let n: Vec<String> = syls("风多头鸟").iter().map(|s| s.nucleus.ipa.clone()).collect();
     assert_eq!(n, ["ɤ", "u̠ɔ", "əʊ̠", "iaʊ̠"]);
