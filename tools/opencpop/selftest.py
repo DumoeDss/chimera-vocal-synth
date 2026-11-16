@@ -49,7 +49,7 @@ def main():
         wav, segs = oc.render(a.singer, mel, os.path.join(a.out, "singer", uid))
         if segs is None: raise SystemExit("the singer build's `render notes` has no --plan")
         front = [x for x in oc.sung(a.singer, mel) if not x.get("melisma")]
-        spans[uid] = [None if p is None else [p[1] - oc.PAD, p[2] - oc.PAD] for p in oc.place(segs, front, [oc.PAD + s.v0 for s in syls])]
+        spans[uid] = [None if p is None else [p[1] - oc.PAD, p[3] - oc.PAD] for p in oc.place(segs, front, [oc.PAD + s.v0 for s in syls])]
         x, sr = oc.read_wav(wav)
         x = x[int(oc.PAD * sr):]  # the recording's time starts where the annotation's does
         w = wave.open(os.path.join(root, "wavs", uid + ".wav"), "wb"); w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)

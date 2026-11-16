@@ -58,9 +58,10 @@ synth's consonant may be shorter or longer than hers and its rhyme then ends som
 syllable whose planned vowel is more than 30 ms from its beat is left out and counted.
 
 **How a rhyme moves** (finals ending in an off-glide, -n or -ng, at least 150 ms long, not slurred).
-Each 5 ms frame's mel cepstrum is placed on the line between the final's start (the mean of its
-first fifth) and its end (the mean of its last 15%): 0 is the sound it starts with, 1 the sound it
-ends with. From that position over time:
+Each 5 ms frame's mel cepstrum is placed on the line between the final's main vowel (the mean of
+the frames 30% to 45% of the way through it: past a medial, before the ending) and its end (the
+mean of its last 15%): 0 is the vowel's sound, 1 the sound it ends with. The synth's final starts
+at its medial, as the corpus's does. From that position over time:
 
 | measure | what it tells you |
 |---|---|

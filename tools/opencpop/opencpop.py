@@ -159,34 +159,36 @@ def sung(exe, mel):
     return json.loads(r.stdout)
 
 def place(segs, syls, beats, tol=0.03):
-    """Where the plan put each syllable: for syllable k, (onset start, vowel start, rhyme end) on the
-    render's timeline, or None when its vowel is more than `tol` from its beat (a note too short
-    for its consonants pushes the vowels late) or it is a melisma's continuation.
+    """Where the plan put each syllable: for syllable k, (consonants' start, rhyme start, vowel
+    start, rhyme end) on the render's timeline, or None when its vowel is more than `tol` from its
+    beat (a note too short for its consonants pushes the vowels late) or it is a melisma's
+    continuation.
 
-    The onset is the syllable's consonants and, for a rising nucleus, the short glide that ends on
-    the beat. The rhyme is the vowels from the beat on (an off-glide, a melisma's further notes)
-    and then the syllable's coda, never past the next syllable's onset."""
+    The rhyme starts with the medial, as a corpus's final does (iang is one final): for a rising
+    nucleus that is the short glide that ends on the beat, otherwise the vowel on the beat. It runs
+    through the vowels from the beat on (an off-glide, a melisma's further notes) and the
+    syllable's coda, never past the next syllable's onset."""
     spots, i = [], 0
     for syl, beat in zip(syls, beats):
         if syl.get("melisma"): spots.append(None); continue
         while i < len(segs) and not (segs[i]["kind"] == "vowel" and segs[i]["t0"] >= beat - tol): i += 1
         if i >= len(segs) or abs(segs[i]["t0"] - beat) > tol: spots.append(None); continue
-        v = a = i
-        if a > 0 and segs[a - 1]["kind"] == "vowel" and abs(segs[a - 1]["t1"] - segs[v]["t0"]) < 1e-6 and segs[a - 1]["t1"] - segs[a - 1]["t0"] < 0.08: a -= 1
-        a = max(0, a - len(syl.get("onset", [])))
-        spots.append((a, v, len(syl.get("coda", []))))
+        v = g = i
+        if g > 0 and segs[g - 1]["kind"] == "vowel" and abs(segs[g - 1]["t1"] - segs[v]["t0"]) < 1e-6 and segs[g - 1]["t1"] - segs[g - 1]["t0"] < 0.08: g -= 1
+        a = max(0, g - len(syl.get("onset", [])))
+        spots.append((a, g, v, len(syl.get("coda", []))))
         i = v + 1
     joined = lambda e: abs(segs[e + 1]["t0"] - segs[e]["t1"]) < 1e-6
     out = []
     for k, sp in enumerate(spots):
         if sp is None: out.append(None); continue
-        a, v, n_coda = sp
+        a, g, v, n_coda = sp
         limit = next((x[0] for x in spots[k + 1:] if x is not None), len(segs))
         e = v
         while e + 1 < limit and joined(e) and segs[e + 1]["kind"] == "vowel": e += 1
         c = 0
         while c < n_coda and e + 1 < limit and joined(e) and segs[e + 1]["kind"] != "vowel": e += 1; c += 1
-        out.append((segs[a]["t0"], segs[v]["t0"], segs[e]["t1"]))
+        out.append((segs[a]["t0"], segs[g]["t0"], segs[v]["t0"], segs[e]["t1"]))
     return out
 
 def read_wav(path):
@@ -241,12 +243,14 @@ def _smooth(v, n=5):
     return np.median(np.lib.stride_tricks.sliding_window_view(pad, n), axis=-1)
 
 def rhyme_measures(trk, a, b):
-    """How a final from a to b (s) moves from the sound it starts with to the sound it ends with.
+    """How a final from a to b (s) moves from its main vowel to the sound it ends with.
 
-    The position p(t) of each frame is its place on the line between the final's start (the mean
-    cepstrum of its first fifth) and its end (the mean of its last 15%): 0 at the start's sound, 1
-    at the end's. A voice that holds one sound and jumps to another crosses fast and then sits at 1;
-    one movement into the ending crosses late and arrives only at the end.
+    The position p(t) of each frame is its place on the line between the final's main vowel (the
+    mean cepstrum of the frames 30% to 45% of the way through it: past a medial, before the
+    ending) and its end (the mean of its last 15%): 0 at the vowel's sound, 1 at the end's. Only
+    the frames after the vowel's are placed. A voice that holds the vowel and jumps to a second
+    sound crosses fast and then sits at 1; one movement into the ending crosses late and arrives
+    only at the end.
       move   how far apart the two sounds are (cepstral distance): small means nothing moved
       t50    when p crosses 0.5, as seconds before the final's end
       cross  how long the crossing from 0.25 to 0.75 takes (s)
@@ -257,12 +261,14 @@ def rhyme_measures(trk, a, b):
     c, db, t = trk.cep[sl], trk.db[sl], trk.t[sl]
     n = len(c)
     if n < 20: return None
-    s, e = c[:max(2, n // 5)].mean(axis=0), c[-max(2, int(0.15 * n)):].mean(axis=0)
+    v0, v1 = int(0.30 * n), max(int(0.45 * n), int(0.30 * n) + 2)
+    s, e = c[v0:v1].mean(axis=0), c[-max(2, int(0.15 * n)):].mean(axis=0)
     d = e - s; move = float(np.sqrt(d @ d))
-    p = _smooth(np.clip((c - s) @ d / max(d @ d, 1e-9), -0.5, 1.5))
+    p = _smooth(np.clip((c[v1:] - s) @ d / max(d @ d, 1e-9), -0.5, 1.5))
+    tt = t[v1:]
     def first(level):
         hit = np.nonzero(p >= level)[0]
-        return t[hit[0]] if len(hit) else t[-1]
+        return tt[hit[0]] if len(hit) else tt[-1]
     end = b
     top = np.sort(db)[-max(2, n // 5):].mean()
     return {"dur": b - a, "move": move, "t50": end - first(0.5), "cross": max(0.0, first(0.75) - first(0.25)),

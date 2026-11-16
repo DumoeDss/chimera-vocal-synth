@@ -39,13 +39,14 @@ def one(job):
         placed = oc.place(segs, front, [oc.PAD + s.v0 for s in syls])
     rows, ini, off = [], {}, 0
     for k, s in enumerate(syls):
-        spot = placed[k] if placed else (oc.PAD + s.c0, oc.PAD + s.v0, oc.PAD + s.v1)
+        spot = placed[k] if placed else (oc.PAD + s.c0, oc.PAD + s.v0, oc.PAD + s.v0, oc.PAD + s.v1)
         if spot is None: off += 1; continue
-        if s.initial and placed: ini.setdefault(s.initial, []).append(spot[1] - spot[0])
+        # the initial's own length: up to the medial, except Opencpop's y and w, which are the medial
+        if s.initial and placed: ini.setdefault(s.initial, []).append(spot[2 if s.initial in ("y", "w") else 1] - spot[0])
         if s.slurred or not kind(s.final) or s.v1 - s.v0 < 0.15: continue
         hv = her_span[k] if her_span is not None else (s.v0, s.v1)
         if hv is None: continue
-        h, y = oc.rhyme_measures(her, hv[0], hv[1]), oc.rhyme_measures(syn, spot[1], spot[2])
+        h, y = oc.rhyme_measures(her, hv[0], hv[1]), oc.rhyme_measures(syn, spot[1], spot[3])
         if h is None or y is None: continue
         cents = oc.f0_track(her, s.v0, min(s.v1, s.v0 + 0.3), s.parts[0][0])
         onset = [float(np.nanmedian(cents[i:j])) if np.isfinite(cents[i:j]).any() else None for i, j in ((0, 3), (3, 6), (6, 10), (10, 20))]
