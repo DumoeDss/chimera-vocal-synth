@@ -126,7 +126,9 @@ tones drawn as held bends and the endings held; the scramble test has not been r
 A native Mandarin speaker listened to the front end above, one round at a time, and heard "a
 foreigner speaking Chinese". Each report was measured in the render (level, LPC formants, the
 articulator tracks, the pitch) and fixed in the front end or in what a front end can ask of the
-singer; English and the other languages plan exactly as before.
+singer. English, Korean and Russian plan exactly as before (the goldens are untouched). Two
+things are not opt-in: any rising nucleus sings its glide before the beat, and any syllable's
+bends wait for `bendStrength`; only the Mandarin front end writes either.
 
 | Heard | Measured | Now | Test |
 |---|---|---|---|
@@ -151,6 +153,7 @@ known to be wrong, with where it was measured:
 - **Rhythm is the notes'.** Nothing speaks Mandarin: Speak doesn't read it, and its timing and
   intonation come with #48.
 - **Live notes** (a key pressed, the plugin) sing neither the closing rhyme nor a tone.
+- **A song that asks for tones** spends up to 9 pitch gestures on each bend, about 17 a syllable.
 
 ## The one format
 
@@ -168,9 +171,10 @@ Every front end writes the same thing, one sung syllable per sounding note:
   millisecond; the measured voice onset also depends on the place and the voice (the Korean table
   above: 45 asked gives 53–69 ms, 90 gives 96–110).
 - `nucleus`: one vowel, or a diphthong the planner knows. Falling ones (aɪ eɪ aʊ oʊ ɔɪ əʊ) hold
-  their first vowel and glide off at the note's end; rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ) sing
+  their first vowel and glide off at the note's end; rising ones (ia iɛ iɑ iʊ ua uo uɔ uɑ uə yɛ, with
+  Mandarin's back u and ʊ: u̠a u̠ɔ u̠ɑ u̠ə iʊ̠, and er's əɝ aɝ) sing
   the first vowel as a quick glide of 50 ms that ends on the beat, after the initial consonant, so
-  the second vowel holds from the beat; triphthongs (iaʊ iəʊ uaɪ ueɪ) do both. The glide is not held
+  the second vowel holds from the beat; triphthongs (iaʊ iəʊ uaɪ ueɪ, and iaʊ̠ iəʊ̠ u̠aɪ u̠eɪ) do both. The glide is not held
   on the beat: sung there as a vowel of its own (it was a quarter of the vowel, at most 120 ms) the
   jaw and tongue sat at its posture for 80-100 ms and the main vowel was 90% reached 200 ms after
   the beat, so a native listener heard 两 as *li-ang* and 快 as *ku-ai*. Now it is 90% reached
@@ -228,7 +232,8 @@ tone's level:
 
 **A song draws bends only as strongly as it asks**: `SongOptions::bend_strength`, `"bendStrength"`
 in a melody file. The default is 0, the melody as written; 1 draws them as the front end wrote
-them; in between scales their semitones. Drawn by default, a native speaker heard "a foreigner
+them; in between scales their semitones. Nothing in the app sets it yet (`planSong` takes
+`bendStrength`), so the app sings no tone. Drawn by default, a native speaker heard "a foreigner
 reciting the tones while singing": in sung Mandarin the melody overrides the lexical tone, and the
 words and the context carry it. The recogniser preferred the bends (the table above), the ear did
 not.

@@ -73,14 +73,37 @@ fn each_tone_is_its_own_contour() {
 }
 
 #[test]
-fn a_fourth_tone_does_not_flick_up_as_the_voice_fades() {
-    // the contour's last pitch holds through the fade instead of letting go back to the note
-    let out = sung("ma4");
-    let at_end = st(&out, BEAT_AT + SECS - 0.07).unwrap();
-    for k in 0..6 {
-        let t = BEAT_AT + SECS - 0.05 + 0.02 * k as f64;
-        if let Some(x) = st(&out, t) {
-            assert!(x < at_end + 0.7, "{:.0} ms past the note's end the pitch is {x:.1}, was {at_end:.1}", (t - (BEAT_AT + SECS - 0.05)) * 1000.0);
+fn a_falling_tone_does_not_flick_up_as_the_voice_fades() {
+    // the contour's last pitch holds through the fade instead of letting go back to the note: a
+    // fourth tone (its last bend is an end bend) and a neutral tone (one start bend, the whole rhyme)
+    for py in ["ma4", "ma5"] {
+        let out = sung(py);
+        let at_end = st(&out, BEAT_AT + SECS - 0.07).unwrap();
+        for k in 0..6 {
+            let t = BEAT_AT + SECS - 0.05 + 0.02 * k as f64;
+            if let Some(x) = st(&out, t) {
+                assert!(x < at_end + 0.7, "{py}: {:.0} ms past the note's end the pitch is {x:.1}, was {at_end:.1}", (t - (BEAT_AT + SECS - 0.05)) * 1000.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_phrase_end_holds_nothing_into_the_next_phrase() {
+    // 骂 mà, a breath, 妈 mā: the fourth tone's last pitch and (安 àn) the coda's closure are held
+    // no further than the next phrase's first consonant, where a hold of the full 0.15 s sat over
+    // it (their release may still run into it, as any coda's does)
+    for first in ["ma4", "an4"] {
+        let mut a = pinyin_syllable(first, first).unwrap();
+        a.phrase_end = true;
+        let b = pinyin_syllable("ma1", "ma1").unwrap();
+        let notes = [SungNote { midi: 57.0, beats: 0.5, syl: a }, SungNote { midi: 57.0, beats: 0.5, syl: b }];
+        let p = plan_song(&notes, &SongOptions { body: "male".into(), bpm: 60.0, t0: BEAT_AT, vibrato: 0.0, bend_strength: Some(1.0), ..Default::default() });
+        let next = p.segments.iter().find(|s| s.ipa == "m" && s.t0 > BEAT_AT + 0.2).expect("the second phrase's m").t0;
+        let held: Vec<_> = p.gestures.iter().filter(|g| matches!(g.label_str(), "bend" | "coda held") && g.t0 < next - 0.05).collect();
+        assert!(!held.is_empty());
+        for g in held {
+            assert!(g.t1 <= next + 1e-9, "{first}: a {} gesture is held to {:.3}, the next phrase starts at {next:.3}", g.label_str(), g.t1);
         }
     }
 }

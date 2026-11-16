@@ -156,9 +156,9 @@ const GLIDE_STEPS: f64 = 8.0;
 
 /// Pitch gestures for a syllable's bends on a vowel sung at `hz` from a to b. `voiced_end` is where
 /// the syllable's voiced rhyme ends (b, or the end of a nasal coda): moving bends are measured to
-/// it. `last`: the phrase ends here, so a moving bend's last pitch holds while the voice fades
-/// (falling back to the note there, a fourth tone ended in an upward flick).
-fn bend_gestures(bends: &[Bend], hz: f64, a: f64, b: f64, voiced_end: f64, last: bool, out: &mut Vec<Gesture>) {
+/// it. `fade`: the phrase ends here, so the contour's last pitch holds this long while the voice
+/// fades (letting go to the note there, a fourth tone ended in an upward flick).
+fn bend_gestures(bends: &[Bend], hz: f64, a: f64, b: f64, voiced_end: f64, fade: Option<f64>, out: &mut Vec<Gesture>) {
     let d = b - a;
     if d <= 0.02 {
         return;
@@ -187,11 +187,12 @@ fn bend_gestures(bends: &[Bend], hz: f64, a: f64, b: f64, voiced_end: f64, last:
         while i <= n {
             let t = t0 + i * w;
             // the first knot of a start bend reaches back into the onset, which already sings it;
-            // the last knot of the phrase's last syllable holds through the fade
+            // the knot that ends the rhyme of the phrase's last syllable holds through the fade
+            // (whichever bend it is: a neutral tone and a half third are one start bend)
             let from = if i == 0.0 && bend.at == Edge::Start { t - 0.03 } else { t };
-            let hold = i == n && bend.at == Edge::End && last;
-            let until = if hold { t + 0.15 } else { t };
-            out.push(Gesture::new(from, until, w, if hold { 0.05 } else { w }, GLIDE_STRENGTH, at(bend.st + (to - bend.st) * i / n)).label("bend"));
+            let hold = fade.filter(|_| i == n && t0 + len >= voiced_end - 1e-9);
+            let until = t + hold.unwrap_or(0.0);
+            out.push(Gesture::new(from, until, w, if hold.is_some() { 0.05 } else { w }, GLIDE_STRENGTH, at(bend.st + (to - bend.st) * i / n)).label("bend"));
             i += 1.0;
         }
     }
@@ -260,6 +261,17 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         // the rest: hold that note to its end, less the breath's release.
         let reserve = if j == notes.len() - 1 { 0.05 } else { 0.12 };
         let last_end = times[j] + notes[j].beats * beat - js_min(reserve, 0.3 * notes[j].beats * beat);
+        // how long past the phrase's end its last sound may be held while the voice fades (a tone's
+        // last pitch, a nasal coda's closure): until the voice is gone, but when another phrase
+        // follows in this call, only until 50 ms (the hold's release) before that phrase's first
+        // consonant, so the hold is out of its way
+        let fade = if j + 1 < notes.len() {
+            let next = &notes[j + 1].syl;
+            let onset = total(&consonants(&next.onset, o.body, 0.8)) + if onglide(&next.nucleus.ipa).is_some() { MEDIAL_GLIDE } else { 0.0 };
+            js_min(0.15, js_max(0.0, times[j + 1] - onset - 0.05 - last_end))
+        } else {
+            0.15
+        };
         for k in i..=j {
             let (span, next) = if k < j { (times[k + 1] - times[k], &mut onsets[k + 1 - i][..]) } else { (last_end - times[k], &mut [][..]) };
             fit([&mut codas[k - i][..], next], span);
@@ -328,7 +340,7 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             segments.extend(plan.segments);
             for &(k, a, b, voiced_end) in &bend_spans {
                 let bends: Vec<Bend> = notes[k].syl.pitch.iter().map(|x| Bend { st: x.st * strength, to: x.to.map(|t| t * strength), ..*x }).collect();
-                bend_gestures(&bends, hz_of(k), a, b, voiced_end, k == j, &mut gestures);
+                bend_gestures(&bends, hz_of(k), a, b, voiced_end, (k == j).then_some(fade), &mut gestures);
             }
             for &(a, b, lead, place) in &nasal_spans {
                 let t0 = b - js_min(lead * (b - a), 0.25);
@@ -355,9 +367,9 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
                     // closed first was a stop for a moment (东 dong dipped 9 dB before its -ng)
                     gestures.push(Gesture::new(b - 0.06, b + 0.02, len, 0.03, 2.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
                 }
-                if let Some((strength, t)) = approach {
+                if let Some((pull, t)) = approach {
                     let len = js_min(CLOSING_APPROACH_MAX, 0.5 * (b - a));
-                    gestures.push(Gesture::new(b - 0.01, b + 0.02, len, 0.03, strength, t).label("coda approach"));
+                    gestures.push(Gesture::new(b - 0.01, b + 0.02, len, 0.03, pull, t).label("coda approach"));
                 }
             }
             // and at the end of a phrase it stays closed, the velum open, until the voice has faded:
@@ -365,9 +377,12 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             // (安 an ended [an-ə], a 3.5 dB bump)
             if let Some((t, hold)) = final_coda {
                 // (the velum stays down past the tongue's release, so no pressure is left to pop. The
-                // release itself still measures -29 dB re the vowel, 0.2 s after the voice ends)
-                gestures.push(Gesture::new(t - 0.03, t + 0.1, 0.02, 0.12, 40.0, hold).label("coda held"));
-                gestures.push(Gesture::new(t - 0.03, t + 0.25, 0.02, 0.05, 4.0, Targets::default().with(ArticKey::Velum, 0.45)).label("velum"));
+                // release itself still measures -29 dB re the vowel, 0.2 s after the voice ends.)
+                // Before another phrase the hold is only as long as `fade` and lets go quickly.
+                let alone = j + 1 >= notes.len();
+                let (held, release, velum) = if alone { (0.1, 0.12, 0.25) } else { (js_min(0.1, fade), 0.05, js_min(0.1, fade)) };
+                gestures.push(Gesture::new(t - 0.03, t + held, 0.02, release, 40.0, hold).label("coda held"));
+                gestures.push(Gesture::new(t - 0.03, t + velum, 0.02, 0.05, 4.0, Targets::default().with(ArticKey::Velum, 0.45)).label("velum"));
             }
             for (a, b) in vowel_spans {
                 if b - a > 0.3 {
