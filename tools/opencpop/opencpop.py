@@ -1,16 +1,19 @@
-"""Opencpop's annotation, read into sung syllables on the recording's timeline, and the signal
-measures the comparison uses. See docs/opencpop-comparison.md.
+"""A Mandarin singing corpus's annotation, read into sung syllables on the recording's timeline,
+and the signal measures the comparison uses. See docs/opencpop-comparison.md.
 
-A line of segments/transcriptions.txt:
-  id|text|phonemes|notes|note durations|phoneme durations|slur flags
-with one entry per phoneme in the last five fields. Phonemes are pinyin initials and finals, SP
-(silence) and AP (breath); a slurred entry repeats the final on a further note (a melisma).
+Two corpora, the same idea: one entry per phoneme (a pinyin initial or final, or a rest), each with
+its length, its note and a slur flag; a slurred entry repeats the final on a further note (a
+melisma).
+  Opencpop   segments/transcriptions.txt, a line: id|text|phonemes|notes|note durations|phoneme
+             durations|slur flags. Notes are names (E4, F#4/Gb4, rest); y and w are initials.
+  M4Singer   meta.json, a list of {item_name, phs, is_slur, ph_dur, notes, notes_dur}. Notes are
+             MIDI numbers (0: a rest); a syllable with no initial is its final alone (uo for wo).
 """
 import json, math, os, subprocess, wave
 import numpy as np
 
 INITIALS = {"b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x", "zh", "ch", "sh", "r", "z", "c", "s", "y", "w"}
-RESTS = {"SP", "AP"}
+RESTS = {"SP", "AP", "<SP>", "<AP>"}
 PAD = 0.3  # the render's lead: its time is the recording's plus this
 
 # finals whose ending is an off-glide or a nasal: where a rhyme can be one movement or two sounds
@@ -27,13 +30,28 @@ def midi(name):
     acc = name.count("#") - name.count("b")
     return 12 * (int(name.lstrip("ABCDEFG#b")) + 1) + step + acc
 
+ZERO = {"i": "yi", "in": "yin", "ing": "ying", "iou": "you", "iu": "you", "u": "wu", "uei": "wei", "ui": "wei",
+        "uen": "wen", "un": "wen", "ueng": "weng", "v": "yu", "ve": "yue", "van": "yuan", "vn": "yun"}
 def pinyin(initial, final):
-    """Opencpop's initial and final -> a pinyin syllable the Pinyin front end reads (toneless)."""
+    """A corpus's initial and final -> the pinyin syllable the Pinyin front end reads (toneless)."""
     f = final
+    if not initial:  # a final alone is spelled with y or w: iang -> yang, uo -> wo, v -> yu
+        if f in ZERO: return ZERO[f]
+        if f[0] == "i": return "y" + f[1:]
+        if f[0] == "u": return "w" + f[1:]
+        return f
     if initial in ("j", "q", "x", "y") and f.startswith("v"): f = "u" + f[1:]
-    if initial not in ("", "y", "w"):
+    if initial not in ("y", "w"):
         f = {"iou": "iu", "uei": "ui", "uen": "un"}.get(f, f)
     return initial + f
+
+# The Pinyin front end leaves a one-letter word to English ("a" is a word), so the three syllables
+# that are one letter are sung as a character each (the Han front end; its lexicon is found from
+# the repository's root, where this is run).
+LONE = {"a": "啊", "o": "哦", "e": "饿"}
+def word(py):
+    """A toneless pinyin syllable as a lyric word the front ends read as Mandarin."""
+    return LONE.get(py, py + "1")
 
 class Syllable:
     __slots__ = ("initial", "final", "py", "c0", "v0", "v1", "parts")
@@ -47,12 +65,13 @@ class Syllable:
     def slurred(self): return len(self.parts) > 1
 
 def parse_line(line):
-    """-> (id, text, [Syllable]); times start at 0 at the segment's start."""
+    """An Opencpop line -> (id, text, [Syllable]); times start at 0 at the segment's start."""
     f = line.rstrip("\n").split("|")
     if len(f) != 7: raise ValueError(f"expected 7 fields, got {len(f)}")
-    uid, text = f[0], f[1]
-    ph, notes, slur = f[2].split(), f[3].split(), [int(x) for x in f[6].split()]
-    dur = [float(x) for x in f[5].split()]
+    return f[0], f[1], syllables(f[0], f[2].split(), [midi(x) for x in f[3].split()], [float(x) for x in f[5].split()], [int(x) for x in f[6].split()])
+
+def syllables(uid, ph, notes, dur, slur):
+    """One entry per phoneme (name, MIDI note or 0, length in s, slur flag) -> [Syllable]."""
     if not (len(ph) == len(notes) == len(dur) == len(slur)): raise ValueError(f"{uid}: field lengths differ")
     t, out, i = 0.0, [], 0
     while i < len(ph):
@@ -61,13 +80,37 @@ def parse_line(line):
             t += dur[i]; i += 1
         elif slur[i] == 1:
             if not out: raise ValueError(f"{uid}: a slur with no syllable before it")
-            out[-1].parts.append((midi(notes[i]), t, t + dur[i])); t += dur[i]; i += 1
+            out[-1].parts.append((notes[i], t, t + dur[i])); t += dur[i]; i += 1
         elif p in INITIALS and i + 1 < len(ph) and ph[i + 1] not in RESTS and ph[i + 1] not in INITIALS and slur[i + 1] == 0:
-            out.append(Syllable(p, ph[i + 1], t, t + dur[i], t + dur[i] + dur[i + 1], midi(notes[i + 1])))
+            out.append(Syllable(p, ph[i + 1], t, t + dur[i], t + dur[i] + dur[i + 1], notes[i + 1]))
             t += dur[i] + dur[i + 1]; i += 2
         else:
-            out.append(Syllable("", p, t, t, t + dur[i], midi(notes[i]))); t += dur[i]; i += 1
-    return uid, text, out
+            out.append(Syllable("", p, t, t, t + dur[i], notes[i])); t += dur[i]; i += 1
+    return [s for s in out if all(m > 0 for m, _, _ in s.parts)]  # a syllable on a rest has no pitch to sing
+
+def load(root):
+    """A corpus folder -> [(id, wav path, voice, [Syllable])] and the lines that didn't parse.
+    voice: "female" or "male", the body that sings it (M4Singer's tenors and basses are male)."""
+    out, bad = [], 0
+    meta = os.path.join(root, "meta.json")
+    if os.path.exists(meta):
+        for e in json.load(open(meta, encoding="utf-8")):
+            singer, song, idx = e["item_name"].split("#")
+            try: syls = syllables(e["item_name"], e["phs"], e["notes"], e["ph_dur"], e["is_slur"])
+            except ValueError: bad += 1; continue
+            voice = "male" if singer.startswith(("Tenor", "Bass")) else "female"
+            if syls: out.append((e["item_name"], os.path.join(root, f"{singer}#{song}", idx + ".wav"), voice, syls))
+        return out, bad
+    for sub in ("segments", ""):
+        t = os.path.join(root, sub, "transcriptions.txt")
+        if not os.path.exists(t): continue
+        for line in open(t, encoding="utf-8"):
+            if not line.strip(): continue
+            try: uid, _, syls = parse_line(line)
+            except ValueError: bad += 1; continue
+            if syls: out.append((uid, os.path.join(root, sub, "wavs", uid + ".wav"), "female", syls))
+        return out, bad
+    raise SystemExit(f"neither meta.json (M4Singer) nor segments/transcriptions.txt (Opencpop) under {root}")
 
 def melody(syls, contiguous=0.03):
     """The syllables as a `chimera render notes` melody on the recording's timeline: each vowel's
@@ -81,7 +124,7 @@ def melody(syls, contiguous=0.03):
         for j, (m, a, b) in enumerate(s.parts):
             if j == len(s.parts) - 1 and joined: b = nxt.v0
             notes.append([m, round(b - a, 5)])
-            words.append(s.py + "1" if j == 0 else "~")
+            words.append(word(s.py) if j == 0 else "~")
         if nxt is not None and not joined:
             notes.append([0, round(nxt.v0 - s.end, 5)])
     return {"bpm": 60, "t0": round(PAD + syls[0].v0, 5), "lyrics": " ".join(words), "notes": notes}
@@ -89,10 +132,10 @@ def melody(syls, contiguous=0.03):
 def unreadable(exe, pys):
     """The syllables the build's front end does not read as pinyin."""
     def bad(batch):
-        r = subprocess.run([exe, "syllables", " ".join(p + "1" for p in batch)], capture_output=True, text=True, encoding="utf-8")
+        r = subprocess.run([exe, "syllables", " ".join(word(p) for p in batch)], capture_output=True, text=True, encoding="utf-8")
         try: got = [s["text"] for s in json.loads(r.stdout)]
         except Exception: got = []
-        if got == [p + "1" for p in batch]: return []
+        if got == [word(p) for p in batch]: return []
         return batch if len(batch) == 1 else bad(batch[:len(batch) // 2]) + bad(batch[len(batch) // 2:])
     pys = sorted(set(pys))
     return bad(pys) if pys else []
