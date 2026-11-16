@@ -1,9 +1,10 @@
 //! Mandarin's four tones, when a song asks for them (`bend_strength` 1; by default a song follows
 //! its melody and draws none). Each tone is the pitch's path through the syllable, in semitones
 //! from the note, the first tone's level: 2 rises to it from below, 3 falls to the bottom and comes
-//! part of the way back, 4 falls from just above it. As bends held at the note's start, 2 and 3
-//! were both a low start jumping up to the note, and a native listener heard every syllable as a
-//! second tone.
+//! part of the way back, 4 falls from just above it. A native listener, hearing single syllables
+//! (each one flat note: no tone is drawn by default), called every one a second tone; and drawn as
+//! bends held at the note's start, as they were, 2 and 3 were one shape, a low start jumping up to
+//! the note.
 use chimera::analysis::pitch::{YinOpts, yin_pitch};
 use chimera::anatomy::human::BODY_MALE;
 use chimera::phonetics::mandarin::{Pinyin, pinyin_syllable, tone_bends};

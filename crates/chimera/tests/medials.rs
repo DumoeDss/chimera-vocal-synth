@@ -1,7 +1,8 @@
 //! A Mandarin medial glide (两 liang, 快 kuai, 话 hua) is a quick transition into the main vowel,
 //! not a held vowel of its own: it is made with the initial consonant and is leaving by the beat, so
 //! the main vowel's posture arrives within ~110 ms of the beat (it took ~200 ms when the glide sat
-//! on the beat as a 120 ms plateau, and listeners heard 两 as li-ang). Measured on the voice's
+//! on the beat as a 120 ms plateau, and listening diagnoses of the renders, by language models,
+//! heard 两 as li-ang). Measured on the voice's
 //! articulators, as `chimera render notes --artic` records them.
 use chimera::anatomy::human::{ArticKey, BODY_MALE};
 use chimera::phonetics::mandarin::pinyin_syllable;

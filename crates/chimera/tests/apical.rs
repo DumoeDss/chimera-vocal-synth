@@ -2,7 +2,7 @@
 //! constriction, held open and voiced, with the lips spread: the tongue tip hardly moves from the
 //! consonant into the vowel. They were once fitted to their formants alone, which the calibration
 //! did with narrowed lips and a backed tongue body and no tip at all (ʅ: lipAp 0.23, tip at rest),
-//! so listeners heard 只 as zhu, zhe or zhi.
+//! and listening diagnoses of the renders (language models) heard 只 as zhu, zhe or zhi.
 use chimera::anatomy::human::{ArticKey, BODY_CHILD, BODY_FEMALE, BODY_MALE, HumanBody};
 use chimera::phonetics::inventory::phoneme;
 use chimera::phonetics::mandarin::pinyin_syllable;
