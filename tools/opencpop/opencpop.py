@@ -138,6 +138,19 @@ def fetch_audio(utts):
             for j, rec in wanted:
                 open(rec, "wb").write(col[j].as_py()["bytes"])
 
+def singer_of(uid):
+    """The singer's name in an utterance's id (M4Singer: Alto-1#song#0000; ACE: acesinger_9#...)."""
+    return uid.split("#")[0] if "#" in uid else ""
+
+def sample(utts, per_singer):
+    """The same number of utterances from every singer, spread over her songs. Each singer starts
+    at a different place in her list: ACE-Opencpop's voices all sing the same segments in the same
+    order, and the same ones from each would be one sample thirty times."""
+    by = {}
+    for u in utts: by.setdefault(singer_of(u[0]), []).append(u)
+    step = lambda g: max(1, len(g) // per_singer)
+    return [u for i, g in enumerate(by.values()) for u in g[(i * 7) % step(g)::step(g)][:per_singer]]
+
 def load(root):
     """A corpus folder -> [(id, wav path, voice, [Syllable])] and the lines that didn't parse.
     voice: "female" or "male", the body that sings it (M4Singer's tenors and basses are male)."""

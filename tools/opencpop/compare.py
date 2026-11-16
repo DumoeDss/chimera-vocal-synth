@@ -1,7 +1,8 @@
 """Sing a Mandarin singing corpus's songs with a CHIMERA build and compare each rhyme with the singer's.
 
   python tools/opencpop/compare.py <corpus root> <chimera exe> [--out out/opencpop]
-      [--per-singer n | --blocks n] [--limit n] [--ids a,b,...] [--jobs n] [--against other/report.json]
+      [--singers a,b] [--per-singer n | --blocks n | --same-as other-run] [--limit n] [--ids a,b,...]
+      [--jobs n] [--against other/report.json]
       [--her-spans spans.json]   (selftest.py only: where a stand-in singer's finals really are)
 
 The corpus is Opencpop or M4Singer (opencpop.py reads both). The synth sings the singer's phonemes
@@ -57,7 +58,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("root"); ap.add_argument("exe")
     ap.add_argument("--out", default="out/opencpop"); ap.add_argument("--limit", type=int); ap.add_argument("--per-singer", type=int)
-    ap.add_argument("--blocks", type=int)
+    ap.add_argument("--blocks", type=int); ap.add_argument("--singers"); ap.add_argument("--same-as")
     ap.add_argument("--ids"); ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     ap.add_argument("--against"); ap.add_argument("--her-spans")
     a = ap.parse_args()
@@ -76,13 +77,14 @@ def main():
     utts = everything
     if a.ids:
         want = set(a.ids.split(",")); utts = [u for u in utts if u[0] in want]
-    if a.per_singer:
-        by = {}
-        for u in utts: by.setdefault(u[0].split("#")[0] if "#" in u[0] else "", []).append(u)
-        # each singer from a different place in her list: ACE-Opencpop's voices all sing the same
-        # segments in the same order, and the same ones from each would be one sample thirty times
-        step = lambda g: max(1, len(g) // a.per_singer)
-        utts = [u for i, g in enumerate(by.values()) for u in g[(i * 7) % step(g)::step(g)][:a.per_singer]]
+    if a.singers:
+        want = set(a.singers.split(",")); utts = [u for u in utts if oc.singer_of(u[0]) in want]
+    if a.same_as:
+        # the utterances another run sang, in its order: two builds are compared on the same ones
+        index = {u[0]: u for u in utts}
+        utts = [index[uid] for uid in json.load(open(os.path.join(a.same_as, "utterances.json"), encoding="utf-8")) if uid in index]
+    elif a.per_singer:
+        utts = oc.sample(utts, a.per_singer)
     if a.blocks:
         # ACE-Opencpop keeps its audio in 40 MB row groups of 100 segments: take whole groups,
         # spread over the files (so over the voices and the songs), every second segment of each
@@ -94,6 +96,7 @@ def main():
         pick = [keys[(j * len(keys)) // a.blocks + (j * 5) % max(1, len(keys) // a.blocks)] for j in range(a.blocks)]
         utts = [u for k in dict.fromkeys(pick) for u in groups[k][::2]]
     if a.limit: utts = utts[:a.limit]
+    json.dump([u[0] for u in utts], open(os.path.join(a.out, "utterances.json"), "w", encoding="utf-8"), ensure_ascii=False)
     oc.fetch_audio(utts)
     unread = set(oc.unreadable(a.exe, [s.py for _, _, _, syls in utts for s in syls]))
     skipped = {"unreadable": 0, "no audio": 0, "render failed": 0}
