@@ -123,9 +123,17 @@ female) and 10% / 15% on the real poems. What's left: tone 3 (about half wrong, 
 a dip in the middle or a 214 measured no better), the sibilants (c heard as ch) and in/ing.
 
 These numbers were measured before the changes in "By a native speaker's ear" below, with the
-tones drawn as held bends and the endings held; the scramble test has not been run since. With
-no tones drawn the recogniser's score should be lower (the "tones as bends" row above): the
-listener's choice, not the recogniser's.
+tones drawn as held bends and the endings held. As it ships, with no tones drawn and the rhymes
+closing in one movement: **37.8% / 39.7%** scrambled (male / female) and 12.5% / 15.0% on the
+real poems (8 scrambles × 2 voices, on Windows). On the same machine #85's head reads 25.0% /
+27.8% and 7.5% / 15.0%, and Korean and English read the same on both builds to the digit
+(52.8 / 53.4% and 68.0 / 73.5% scrambled; their 36 renders are byte-identical), within 2.2
+points of the table below. So the recogniser scores this 12 points worse than the version the
+native listener called "a foreigner speaking Chinese"; the listener chose this one. Of the
+scrambled syllables it heard, the wrong initials went from 19% to 29% (s as sh 13 of 15 times,
+as before; sh as f, ch as h), the wrong finals from 15% to 23% (uang as ang or uan, i as e, eng
+as ong), the wrong tones from 34% to 48%. Which of the changes cost the initials is not known.
+It listens at 16 kHz, so it hears nothing of a sibilant above 8 kHz.
 
 ### By a native speaker's ear
 
