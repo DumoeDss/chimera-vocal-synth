@@ -190,8 +190,7 @@ export function planPhrases(phrases: { segments: Segment[]; intonation?: "statem
   return call("planPhrases", { phrases: phrases.map((p) => ({ segments: p.segments, intonation: p.intonation, pause: p.pause })), options });
 }
 
-/** `bendStrength`: how strongly the syllables' pitch bends (a Mandarin tone) are drawn; 0 or unset, the melody as written. */
-export function planSong(notes: SungNote[], options: { body: BodyMix; bpm: number; t0: number; vibrato: number; bendStrength?: number }): Plan {
+export function planSong(notes: SungNote[], options: { body: BodyMix; bpm: number; t0: number; vibrato: number }): Plan {
   return call("planSong", { notes, options });
 }
 

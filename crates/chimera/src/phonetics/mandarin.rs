@@ -10,15 +10,15 @@
 //!   turns the others second (你好 ni2 hao3).
 //! - Pinyin → IPA on the inventory. Stops and affricates say their aspiration, which is what
 //!   Mandarin contrasts: b d g z zh j are unaspirated (p˭ t˭ k˭ ts˭ tʂ˭ tɕ˭), p t k c ch q aspirated.
-//! - Tones → pitch contours ([`tone_bends`]), which a song draws only when it asks for tones: by
-//!   default the melody stays as written.
+//! - Tones are read, not sung: a song follows its melody. They decide the sandhi above and the
+//!   neutral tone's reduced vowel, and wait for speech to be drawn as pitch.
 //!
 //! [`Pinyin`] reads Mandarin typed as pinyin instead, with no lexicon: a Latin word that carries
 //! tones (marks, "nǐhǎo", or numbers, "ni3 hao3") and parses as pinyin. Toneless words stay
 //! English.
 
 use super::syllables::FrontEnd;
-use super::{Bend, Edge, Segment, Syllable};
+use super::{Segment, Syllable};
 use std::collections::HashMap;
 
 pub fn is_han(c: char) -> bool {
@@ -133,44 +133,6 @@ fn third_tones(py: &mut [String]) {
         i = j.max(i + 1);
     }
 }
-
-/// A Mandarin tone as the pitch's path through its syllable, in semitones from the note, which is
-/// the first tone's level (see [`Bend`]; a song draws these only when it asks for tones). In Chao's
-/// numbers, one step about 2.5 semitones: 1 is 55, level on the note; 2 is 35, low and still for
-/// the first third, then rising to the note; 3 is 214, falling to the bottom of the voice and
-/// coming part of the way back; 4 is 51, from a little above the note down to the bottom; the
-/// neutral tone is short, low and falling. (As held bends, 2 and 3 were both a low start that
-/// jumped up to the note: every toned syllable sounded like a second tone.)
-pub fn tone_bends(tone: u8) -> Vec<Bend> {
-    let b = |at, len, st, to| Bend { at, len, max: MAX_BEND, st, to: Some(to) };
-    match tone {
-        2 => vec![b(Edge::Start, 0.3, -5.0, -5.5), b(Edge::End, 0.7, -5.5, 0.0)],
-        3 => vec![b(Edge::Start, 0.5, -6.0, -10.5), b(Edge::End, 0.5, -10.5, -5.0)],
-        4 => vec![b(Edge::Start, 0.2, 2.0, 1.5), b(Edge::End, 0.8, 1.5, -9.0)],
-        5 => vec![b(Edge::Start, 1.0, -4.0, -7.0)],
-        _ => vec![],
-    }
-}
-
-/// A tone's bends have no cap in seconds: the contour is the syllable's length, whatever it is.
-const MAX_BEND: f64 = 1e9;
-
-/// A third tone that isn't its word's last syllable: low and falling, without the rise (半三声, 21).
-fn half_third() -> Vec<Bend> {
-    vec![Bend { at: Edge::Start, len: 1.0, max: MAX_BEND, st: -6.0, to: Some(-10.0) }]
-}
-
-/// Third tones inside a word (every syllable but its last) are half thirds.
-fn half_thirds(word: &mut [Syllable]) {
-    let third = tone_bends(3);
-    let n = word.len();
-    for s in word.iter_mut().take(n.saturating_sub(1)) {
-        if s.pitch == third {
-            s.pitch = half_third();
-        }
-    }
-}
-
 
 /// Fraction of a vowel nasalised before -n/-ng.
 const NASAL_LEAD: f64 = 0.6;
@@ -375,7 +337,6 @@ pub fn pinyin_syllable(py: &str, text: &str) -> Option<Syllable> {
         onset,
         nucleus: Segment::new(nucleus),
         coda: coda.iter().map(|c| Segment { dur: coda_dur(c), ..Segment::new(c) }).collect(),
-        pitch: tone_bends(t),
         // vowels before -n/-ng are nasalised. (Lighter neutral tones, breath 0.7 on 的 了, sounded
         // more natural but made them harder to recognise in the scramble test, so they stay full.)
         nasal_lead: (!coda.is_empty()).then_some(NASAL_LEAD),
@@ -439,7 +400,6 @@ impl FrontEnd for Mandarin<'_> {
             }
             out.extend(pinyin_syllable(py, &c.to_string()));
         }
-        half_thirds(&mut out);
         out
     }
 }
@@ -638,8 +598,6 @@ impl FrontEnd for Pinyin {
         let Some(sy) = parse_pinyin(word) else { return Vec::new() };
         let mut py: Vec<String> = sy.iter().map(|s| s.1.clone()).collect();
         third_tones(&mut py);
-        let mut out: Vec<Syllable> = sy.iter().zip(&py).filter_map(|((text, _), p)| pinyin_syllable(p, text)).collect();
-        half_thirds(&mut out);
-        out
+        sy.iter().zip(&py).filter_map(|((text, _), p)| pinyin_syllable(p, text)).collect()
     }
 }

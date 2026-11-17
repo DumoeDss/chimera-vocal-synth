@@ -7,7 +7,7 @@ lyrics ──► router ──► FRONT END ──► syllables ──► BACK E
            (by script)  English: CMUdict         (IPA, with what     the planner, the airway,
                         Korean: Hangul rules      the language        the voice: the same for
                         Mandarin: pinyin lexicon  decides: aspiration, every language
-                        Pinyin: typed with tones  tones as pitch bends)
+                        Pinyin: typed with tones  consonant lengths)
                         Russian: spelling rules
                         explicit syllables
 ```
@@ -69,12 +69,16 @@ it, untried) and the stiff voice of tense stops. A Korean speaker's ear is still
 Han characters are read through a lexicon of character and phrase readings (MIT-licensed pinyin
 data, `tools/build-mandarin.ts`), longest phrase first: 银行 is yín háng, 行走 xíng zǒu. Then:
 
-- **Tone changes:** third-tone sandhi inside a phrase (你好 sings ní hǎo), and 不 and 一 before a
+- **Tone changes:** third-tone sandhi inside a phrase (你好 reads ní hǎo), and 不 and 一 before a
   fourth tone (不会 bú huì, 一个 yí gè).
 - **Aspiration said:** p t k q ch c are aspirated with Mandarin's longer aspiration (`vot` 90 ms),
   b d g j zh z voiceless and unaspirated, not voiced stand-ins.
-- **Tones** are written into each syllable as a pitch contour (below), and a song draws them only
-  when it asks (`bendStrength`): sung Mandarin follows its melody.
+- **Tones are read and not sung:** a song follows its melody. The reading keeps its tones (they
+  decide the sandhi above and the neutral tone's reduced vowel), and no syllable bends the pitch
+  for them. A native listener compared a nursery song and a greeting sung as written and with
+  each tone drawn on the note as a contour, at half and at full depth, and chose the melody as
+  written wherever there was one: "flat sounds sung, the full tones sound spoken, half sounds
+  odd". Drawing them is for speech (#48).
 - **Medials inside the vowel:** 话 is the rising diphthong `u̠a` and 鸟 the three-part `iaʊ̠`: the
   medial is a 50 ms glide that ends on the beat, after the initial consonant.
 - **Mandarin's own vowels:** the apical vowels ɿ (四) and ʅ (是), the back u `u̠` (乌, and the medial
@@ -119,7 +123,9 @@ female) and 10% / 15% on the real poems. What's left: tone 3 (about half wrong, 
 a dip in the middle or a 214 measured no better), the sibilants (c heard as ch) and in/ing.
 
 These numbers were measured before the changes in "By a native speaker's ear" below, with the
-tones drawn as held bends and the endings held; the scramble test has not been run since.
+tones drawn as held bends and the endings held; the scramble test has not been run since. With
+no tones drawn the recogniser's score should be lower (the "tones as bends" row above): the
+listener's choice, not the recogniser's.
 
 ### By a native speaker's ear
 
@@ -137,18 +143,18 @@ The first report named no sound, so the renders were given to language models to
 heard ("model" below), and what they named was measured. Everything was measured in
 the render (level, LPC formants, the articulator tracks, the pitch) and fixed in the front end or
 in what a front end can ask of the singer. English, Korean and Russian plan exactly as before (the
-goldens are untouched). Two things are not opt-in: any rising nucleus sings its glide before the
-beat, and any syllable's bends wait for `bendStrength`; only the Mandarin front end writes either.
+goldens are untouched). One thing is not opt-in: any rising nucleus sings its glide before the
+beat; only the Mandarin front end writes one.
 
 | Reported | By | Measured | Now | Test |
 |---|---|---|---|---|
 | 两 as *li-ang*, 快 as *ku-ai* | model | the medial sat on the beat for 80-100 ms; the main vowel 90% reached 200 ms after it | a 50 ms glide ending on the beat; 80-90 ms | `medials.rs` |
-| the tones laid over the tune | model | every 2nd and 3rd tone scooped up from 3.5-4 semitones below, every 4th dropped 4 at its end | a song follows its melody unless it asks for tones | `bends.rs` |
+| the tones laid over the tune | model, then the native speaker's choice | every 2nd and 3rd tone scooped up from 3.5-4 semitones below, every 4th dropped 4 at its end | no tone is drawn: a song follows its melody | `mandarin.rs` |
 | 二, 耳 as an American "er" | model | /ɝ/ held still | a central vowel moving into the r-colouring, 二 more open | `er.rs` |
 | 只 as zhu, zhe or zhi | model | ɿ ʅ fitted to formants alone: lips narrowed to 0.2, no tongue tip | the sibilant's tip held open, lips spread, by the calibrator | `apical.rs` |
 | still a foreigner (report 2) | native speaker | the largest distance from Beijing speakers' vowels: u and ong's F2 997 and 1126 Hz (men) against 661 and 730 (Zee & Lee 2001) | `u̠` 649 Hz, `ʊ̠` 765 Hz | `mandarin_u.rs`, `mandarin_ong.rs` |
 | every compound and nasal rhyme two sounds: "ang is an + ng" (report 3) | native speaker | 奥 for 1.33 s: [a] still 0.76 s, a jump, [ʊ] still 0.35 s. 昂: an oral [ɑ], a 40 ms jump of the tongue body, 0.4 s of murmur. A phrase's last -n let go into a vowel | one movement into the ending over the note's last 0.2 s at most; the velum lowers gradually; the tongue body approaches the coda's place; a final coda stays closed | `mandarin_rhymes.rs` |
-| every single syllable "a second tone" (report 4) | native speaker | each was one flat note (no tone is drawn by default); and with tones on, 2 and 3 were one shape (low, then a jump to the note) | each tone its own contour through the syllable | `mandarin_tones.rs` |
+| every single syllable "a second tone" (report 4) | native speaker | each was one flat note; drawn as #85's held bends, 2 and 3 were one shape (low, then a jump to the note) | nothing in a song (the row above). Each tone as its own contour through the syllable was what the listener then heard as "like normal speech" on one pitch; it waits for speech (#48) | |
 
 The same listener's verdict on the result: much improved, and still not a native speaker. What is
 known to be wrong, with where it was measured:
@@ -156,14 +162,15 @@ known to be wrong, with where it was measured:
 - **Vowel qualities still lean English.** Against Zee & Lee's means for Beijing speakers: a's F1
   is 20-25% low (the model's jaw and lip range ends before it), o's F2 23% high, e [ɤ]'s F2 14-18%
   high, en and eng's F1 16-34% low, i and y's F2 7-12% low.
-- **Tones are citation shapes.** The contours come from the usual five-level numbers, not from
-  recordings; in a sentence there is no declination, a neutral tone doesn't follow the tone before
-  it, and neighbouring tones don't lean on each other. A full third tone is not creaky.
+- **No tones.** On a melody that is the listener's choice. On one pitch, with no melody, the
+  same listener heard the flat version as "speech with something wrong" and the tones drawn in
+  full as "like normal speech": that is Speak's to do (#48), with declination, the neutral tone
+  following the tone before it, and neighbouring tones leaning on each other, none of which a
+  table of citation shapes has.
 - **Aspirated affricates** (q ch c) have a silent gap between the frication and the vowel.
 - **Rhythm is the notes'.** Nothing speaks Mandarin: Speak doesn't read it, and its timing and
   intonation come with #48.
-- **Live notes** (a key pressed, the plugin) sing neither the closing rhyme nor a tone.
-- **A song that asks for tones** spends up to 9 pitch gestures on each bend, about 17 a syllable.
+- **Live notes** (a key pressed, the plugin) don't sing the closing rhyme.
 
 ## The one format
 
@@ -224,30 +231,9 @@ Tones, pitch accent or a scoop need the pitch to move inside a note (#32 step 4)
 The melody stays as written; a bend only colours part of the note. A start bend begins in the
 onset, so the consonants already sing its pitch and a rise starts low rather than at the note. A
 middle bend is centred on the vowel (a dip or a peak inside it). A melisma continues at its written
-pitches. The planner draws bends without knowing what they mean: a language's tones are a table in
-its front end (Mandarin's is `tone_bends`). A syllable without bends sings exactly as before.
-
-A bend with `to` moves: the pitch goes from `st` to `to` across it instead of holding `st`, and it
-is measured on the vowel and a nasal coda together, so bends that meet draw one contour through the
-syllable. Mandarin's tones are written this way, in semitones from the note, which is the first
-tone's level:
-
-| Tone | Chao | Path |
-|---|---|---|
-| 1 | 55 | level on the note |
-| 2 | 35 | -5 → -5.5 over the first 30%, then up to the note |
-| 3 | 214 | -6 → -10.5 over the first half, then back up to -5 |
-| 3 inside a word | 21 | -6 → -10, no rise |
-| 4 | 51 | +2 → +1.5 over the first 20%, then down to -9 |
-| neutral | | -4 → -7 |
-
-**A song draws bends only as strongly as it asks**: `SongOptions::bend_strength`, `"bendStrength"`
-in a melody file. The default is 0, the melody as written; 1 draws them as the front end wrote
-them; in between scales their semitones. Nothing in the app sets it yet (`planSong` takes
-`bendStrength`), so the app sings no tone. Drawn by default they were what the listening diagnoses
-of the demo song named first (scoops and a fall laid over the tune): in sung Mandarin the melody
-overrides the lexical tone, and the words and the context carry it. The recogniser preferred the
-bends (the table above), the listeners did not.
+pitches. The planner draws bends without knowing what they mean. A syllable without bends sings
+exactly as before, and no built-in front end writes one now: Mandarin's tones were bends, and
+its listener chose the melody as written (above).
 
 ## Adding a language
 
@@ -312,6 +298,6 @@ in for a native listener; the test says where to look and whether a change moved
   built on the one front-end list (#40).
 - **Bends on live notes:** a key pressed in Sing or a note from the plugin (`plan_note_on`) sings
   the note's pitch.
-- **Tones in speech:** Speak doesn't read Mandarin yet; its tone contours and speech tuning come
+- **Tones in speech:** Speak doesn't read Mandarin yet; the tones' contours and speech tuning come
   next, from #48, onto this front end.
 - **IPA tone letters** (`˥˩`, #52) don't write bends yet.

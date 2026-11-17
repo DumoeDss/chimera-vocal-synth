@@ -1,10 +1,10 @@
 //! Mandarin: the front end reads Han characters: longest phrase match, tone sandhi, pinyin → IPA
-//! with aspiration said, tones → pitch bends; and pinyin typed with tones.
+//! with aspiration said, tones read and not sung; and pinyin typed with tones.
 use chimera::phonetics::english::EnglishG2P;
 use chimera::phonetics::korean::Korean;
-use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin, tone_bends};
+use chimera::phonetics::mandarin::{Mandarin, MandarinLexicon, Pinyin};
 use chimera::phonetics::syllables::{English, FrontEnd, read_lyrics};
-use chimera::phonetics::{Edge, Syllable};
+use chimera::phonetics::Syllable;
 
 const LEX: &str = "举\tju3\n风\tfeng1\n多\tduo1\n头\ttou2\n鸟\tniao3\n光\tguang1\n四\tsi4\n是\tshi4\n点\tdian3\n哪\tna3\n儿\ter2\n女\tnv3\n子\tzi5\n块\tkuai4\n一会儿\tyi1 hui4 er5\n天\ttian1\n你\tni3\n好\thao3\n我\two3\n不\tbu4\n会\thui4\n银\tyin2\n行\txing2\n银行\tyin2 hang2\n走\tzou3\n的\tde5\n跑\tpao3\n一\tyi1\n个\tge4\n绿\tlv4\n学\txue2\n吃\tchi1\n爱\tai4\n去\tqu4\n";
 
@@ -46,15 +46,16 @@ fn pinyin_becomes_ipa_with_aspiration_said() {
 }
 
 #[test]
-fn tones_become_bends_and_text_keeps_the_character() {
+fn tones_are_read_and_not_sung_and_text_keeps_the_character() {
     let s = syls("你好");
     assert_eq!((s[0].text.as_str(), s[1].text.as_str()), ("你", "好"));
-    assert_eq!(s[0].pitch, tone_bends(2)); // sandhi: sung as a rising tone
-    assert_eq!(s[1].pitch, tone_bends(3));
     assert!(s[1].word_end && !s[0].word_end);
-    assert!(tone_bends(1).is_empty());
-    assert_eq!(tone_bends(5).len(), 1); // the neutral tone: low and falling
-    assert_eq!(tone_bends(4).iter().map(|b| b.at).collect::<Vec<_>>(), [Edge::Start, Edge::End]);
+    // the reading has its tones, sandhi applied (你 before a third tone is second)
+    assert_eq!(lex().read("你好"), ["ni2", "hao3"]);
+    // and no syllable bends the pitch for them: a song sings its melody. A native listener chose
+    // this over the tones drawn on the melody at half and at full depth ("flat sounds sung, the
+    // full tones sound spoken, half sounds odd")
+    assert!(syls("你好，我是中国人，谢谢").iter().all(|s| s.pitch.is_empty()));
 }
 
 #[test]
@@ -83,11 +84,8 @@ fn pinyin_with_tones_is_mandarin_and_without_is_english() {
     assert_eq!(text, ["nǐ", "hǎo", "xiè", "xie", "ni3", "hao3", "de5", "Xī", "ān", "nǚ"]); // capitals kept
     let ipa: Vec<&str> = t.iter().map(|x| x.1.as_str()).collect();
     assert_eq!(ipa, ["ni", "xaʊ̠", "ɕiɛ", "ɕiɛ", "ni", "xaʊ̠", "t˭ə", "ɕi", "ʔan", "ny"]);
-    // nǐhǎo is one word: third-tone sandhi sings nǐ rising; "ni3 hao3" are two words
-    assert_eq!(t[0].2, tone_bends(2).len());
-    assert_eq!(t[4].2, tone_bends(3).len());
-    // the unmarked syllable of a marked word is neutral: low and falling
-    assert_eq!(t[3].2, tone_bends(5).len());
+    // the tones make it pinyin; none of them bends the pitch (a song sings its melody)
+    assert!(t.iter().all(|x| x.2 == 0));
     // English: no tones, not pinyin. A word pinyin declines reads as it would without pinyin
     // ("café" English's "caf", not "caf" and a pinyin "é"), and nothing in it is lost: "Zürich über"
     // sings "Z rich ber" as on main (review of #78: it sang "Z ber")
