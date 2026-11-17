@@ -223,9 +223,8 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
         }
         let mut segs: Vec<Segment> = Vec::new();
         let mut vowel_spans: Vec<(f64, f64)> = Vec::new();
-        // (note, vowel start, vowel end) of syllables with bends, and of vowels before a nasal coda
+        // (note, vowel start, vowel end, voiced end) of syllables with bends
         let mut bend_spans: Vec<(usize, f64, f64, f64)> = Vec::new();
-        let mut nasal_spans: Vec<(f64, f64, f64, &str)> = Vec::new();
         // (vowel start, vowel end, fraction nasalised, the tongue body's approach to the coda) of
         // closing rhymes
         let mut closing_spans: Vec<(f64, f64, f64, Option<(f64, Targets)>)> = Vec::new();
@@ -318,11 +317,6 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
                     if k == j && coda.len() == 1 {
                         final_coda = closure(&coda[0].ipa, o.body).map(|t| (times[k] + vdur + total(&coda), t));
                     }
-                } else if lead > 0.0 {
-                    // the tongue body's rise toward -ng after the back vowel ɑ (ang, iang, uang); after
-                    // other vowels, and toward -n, it measured no better or worse
-                    let place = if coda[0].ipa == "ŋ" && held_vowel(nuc) == "ɑ" { "velar" } else { "" };
-                    nasal_spans.push((times[k], times[k] + vdur, lead, place));
                 }
             }
             // a nasal coda is voiced: it carries the end of a tone's contour
@@ -342,21 +336,6 @@ pub fn plan_song(notes: &[SungNote], o: &SongOptions) -> Plan {
             for &(k, a, b, voiced_end) in &bend_spans {
                 let bends: Vec<Bend> = notes[k].syl.pitch.iter().map(|x| Bend { st: x.st * strength, to: x.to.map(|t| t * strength), ..*x }).collect();
                 bend_gestures(&bends, hz_of(k), a, b, voiced_end, (k == j).then_some(fade), &mut gestures);
-            }
-            for &(a, b, lead, place) in &nasal_spans {
-                let t0 = b - js_min(lead * (b - a), 0.25);
-                gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 4.0, Targets::default().with(ArticKey::Velum, 0.3)).label("nasal vowel"));
-                // and the tongue on its way to the coda's place, which is where -n and -ng differ
-                // in the vowel: the body rising toward the velum for -ng, the tip toward the ridge
-                // for -n (short of closure; the coda closes)
-                let approach = match place {
-                    "velar" => Some(Targets::default().with(ArticKey::TbY, 7.95)),
-                    "alveolar" => Some(Targets::default().with(ArticKey::TtX, 6.2).with(ArticKey::TtY, 9.3)),
-                    _ => None,
-                };
-                if let Some(t) = approach {
-                    gestures.push(Gesture::new(t0, b + 0.02, 0.06, 0.03, 2.5, t).label("coda approach"));
-                }
             }
             // a closing rhyme's nasal coda: the velum comes down gradually over the nasalised part of
             // the vowel (strength 2 follows the ramp itself, see Articulators) instead of dropping

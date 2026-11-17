@@ -192,7 +192,8 @@ Every front end writes the same thing, one sung syllable per sounding note:
   calibrated vowels too.
 - A consonant may say its sung `"dur"` (s); unsaid, its spoken length × 0.8.
 - `pitch`: bends at the note's start, middle or end (below).
-- `nasalLead`: nasalise this fraction of the vowel before a nasal coda (unsaid: none).
+- `nasalLead`: on a closing rhyme (`closing`), nasalise this fraction of the vowel before its
+  nasal coda (unsaid: none).
 - `closing`: the rhyme's ending is one closing movement at the end of the note, this long at most
   (seconds; Mandarin says 0.2), instead of a part of its own. A falling off-glide then takes at
   most that long and at most 60% of the vowel, half of it the glide coming in and half the vowel

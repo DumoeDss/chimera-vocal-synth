@@ -211,7 +211,7 @@ export interface Syllable {
   phraseEnd: boolean;
   /** pitch bends inside the sung note, written by the syllable's front end (a tone, an accent) */
   pitch?: Bend[];
-  /** nasalise this fraction of the vowel before a nasal coda (unset: none) */
+  /** nasalise this fraction of the vowel before a closing rhyme's nasal coda (see `closing`; unset: none) */
   nasalLead?: number;
   /** the rhyme's ending (an off-glide, a nasal coda) is one closing movement at the note's end, this long at most (s); unset: a held part */
   closing?: number;

@@ -126,8 +126,8 @@ pub struct Syllable {
     /// accent, a scoop); none: the note's pitch as written
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pitch: Vec<Bend>,
-    /// nasalise this fraction of the vowel before a nasal coda (at most 0.25 s), as Mandarin does;
-    /// None: the song's SongOptions::nasal_lead
+    /// nasalise this fraction of the vowel before a closing rhyme's nasal coda (`closing`; at most
+    /// 0.25 s), as Mandarin does; None: the velum lowers only for the nasal itself
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nasal_lead: Option<f64>,
     /// the rhyme's ending (a falling diphthong's off-glide, a nasal coda) is one closing movement at

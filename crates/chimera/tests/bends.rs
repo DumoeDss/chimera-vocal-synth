@@ -57,10 +57,12 @@ fn a_melisma_keeps_its_written_pitches() {
 
 #[test]
 fn nasal_lead_nasalises_only_before_a_nasal_coda() {
-    // the syllable says its nasal lead (a front end: Mandarin's 0.4); unsaid, none
-    let notes = |lead| vec![SungNote { midi: 57.0, beats: 2.0, syl: Syllable { nasal_lead: lead, ..syl("ɕ", "i", &["ŋ"], vec![]) } }, SungNote { midi: 59.0, beats: 2.0, syl: Syllable { nasal_lead: lead, ..syl("t", "a", &[], vec![]) } }];
-    assert!(labelled(&plan_song(&notes(None), &opts()).gestures, "nasal vowel").is_empty());
-    let p = plan_song(&notes(Some(0.4)), &opts());
+    // a closing rhyme says its nasal lead (a front end: Mandarin's 0.6); unsaid, none; and a rhyme
+    // that isn't a closing one has its coda as a part of its own, with nothing leading it
+    let notes = |lead, closing| vec![SungNote { midi: 57.0, beats: 2.0, syl: Syllable { nasal_lead: lead, closing, ..syl("ɕ", "i", &["ŋ"], vec![]) } }, SungNote { midi: 59.0, beats: 2.0, syl: Syllable { nasal_lead: lead, closing, ..syl("t", "a", &[], vec![]) } }];
+    assert!(labelled(&plan_song(&notes(None, Some(0.2)), &opts()).gestures, "nasal vowel").is_empty());
+    assert!(labelled(&plan_song(&notes(Some(0.4), None), &opts()).gestures, "nasal vowel").is_empty());
+    let p = plan_song(&notes(Some(0.4), Some(0.2)), &opts());
     let nv = labelled(&p.gestures, "nasal vowel");
     assert_eq!(nv.len(), 1, "only the syllable with a nasal coda");
     assert!(nv[0].targets.get(ArticKey::Velum).unwrap() > 0.0);
@@ -79,21 +81,6 @@ fn a_start_bend_begins_in_the_onset() {
     // without a start bend the onset sings the note
     let plain = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("m", "a", &[], vec![]) }], &opts());
     assert!(plain.gestures.iter().filter(|g| g.label.as_ref().is_some_and(|l| l.as_str() == "pitch") && g.t1 <= 0.5 + 1e-9).filter_map(|g| g.targets.get(ControlKey::F0)).all(|f| (f - hz).abs() < 1e-9));
-}
-
-#[test]
-fn before_ng_after_a_back_vowel_the_tongue_rises_toward_the_velum() {
-    // in the nasal-lead window, -ng after ɑ gets the tongue body's approach; -n and other vowels don't
-    let approach = |v: &str, coda: &str| {
-        let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: Syllable { nasal_lead: Some(0.4), ..syl("t", v, &[coda], vec![]) } }], &opts());
-        labelled(&p.gestures, "coda approach").len()
-    };
-    assert_eq!(approach("ɑ", "ŋ"), 1);
-    assert_eq!(approach("ɑ", "n"), 0);
-    assert_eq!(approach("ə", "ŋ"), 0);
-    // no nasal lead, no approach
-    let p = plan_song(&[SungNote { midi: 57.0, beats: 2.0, syl: syl("t", "ɑ", &["ŋ"], vec![]) }], &opts());
-    assert!(labelled(&p.gestures, "coda approach").is_empty());
 }
 
 /// a Mandarin 2nd and 4th tone's bends, as the front end writes them
