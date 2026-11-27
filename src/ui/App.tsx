@@ -10,7 +10,7 @@ import { VowelMap } from "./components/VowelMap.tsx";
 import { VoiceControls } from "./components/VoiceControls.tsx";
 import { Keys, MidiButton } from "./components/Keys.tsx";
 import { ActionBar, PrimaryButton } from "./components/ActionBar.tsx";
-import { Segmented, Toggle } from "./components/Controls.tsx";
+import { Menu, Segmented, Toggle } from "./components/Controls.tsx";
 import { Chip, Screen } from "./components/Screen.tsx";
 import { SpeakRight, speechInfo, speechSlots, speechWords } from "./components/SpeakPanel.tsx";
 import { BestiaryRight } from "./components/BestiaryPanel.tsx";
@@ -22,6 +22,8 @@ import type { BodyName } from "../worklet/protocol.ts";
 import { BodyPad } from "./components/BodyPad.tsx";
 import { ResizeGrip } from "./components/ResizeGrip.tsx";
 import { presetOf, PRESETS } from "./body.ts";
+import { useSing } from "./singing.ts";
+import { chooseVoice, VOICE_PRESETS, voiceChoiceOf, type VoiceChoice } from "./voices.ts";
 
 // three.js only loads when the 3D view is first shown
 const AnatomyView3D = lazy(() => import("./components/AnatomyView3D.tsx").then((m) => ({ default: m.AnatomyView3D })));
@@ -124,12 +126,13 @@ function ViewToggles() {
   );
 }
 
-/** The body, in the head's header: three presets and the triangle between them. */
+/** The body, in the head's header: three presets and the triangle between them, and the voice. */
 function BodyControl() {
   const body = useStore((s) => s.body);
   const setBody = useStore((s) => s.setBody);
   return (
     <div className="body-control">
+      <VoiceMenu />
       <Segmented<BodyName>
         label="Body"
         value={presetOf(body)}
@@ -143,6 +146,20 @@ function BodyControl() {
       <BodyPad />
     </div>
   );
+}
+
+/** The voice presets (#184): a body and its tone in one choice. Edited by hand, it says Custom. */
+function VoiceMenu() {
+  const body = useStore((s) => s.body);
+  const source = useStore((s) => s.source);
+  const vibrato = useSing((s) => s.vibrato);
+  const now = voiceChoiceOf(body, source, vibrato);
+  const options: { value: VoiceChoice | "custom"; label: string; disabled?: boolean }[] = [
+    { value: "default", label: "Default voice" },
+    ...VOICE_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+  ];
+  if (now === null) options.push({ value: "custom", label: "Custom", disabled: true });
+  return <Menu label="Voice" value={now ?? "custom"} options={options} onChange={(v) => v !== "custom" && chooseVoice(v)} />;
 }
 
 /** The tall left screen: the face (or the creature) with its overlays. No title: it shows itself. */

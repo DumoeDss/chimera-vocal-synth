@@ -92,6 +92,9 @@ function kept(): { lyrics: string; lang: Lang; tune: string; tempo: number; key:
 }
 
 const atLoad = kept();
+/** Sing's vibrato depth on held vowels until the player (or a voice preset) changes it (cents) */
+export const DEFAULT_VIBRATO = 35;
+
 /** the player's words and their language while a demo song's are in the lyrics */
 let ownWords: { lyrics: string; lang: Lang } | null = null;
 
@@ -100,7 +103,7 @@ export const useSing = create<SingState>((set, get) => ({
   lang: atLoad.lang,
   syllables: lyricsToSyllables(atLoad.lyrics, atLoad.lang),
   cursor: 0,
-  vibrato: 35,
+  vibrato: DEFAULT_VIBRATO,
   tune: atLoad.tune,
   tempo: atLoad.tempo,
   key: atLoad.key,

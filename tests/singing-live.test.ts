@@ -507,3 +507,38 @@ describe("a main button pressed before the audio is up", () => {
     useStore.setState({ startError: null });
   });
 });
+
+describe("voice presets (#184)", () => {
+  test("a preset sets its body, tone and vibrato; Default voice puts the tone back and keeps the body; a hand edit is Custom", async () => {
+    const { useStore } = await import("../src/ui/store.ts");
+    const { chooseVoice, voiceChoiceOf, VOICE_PRESETS, DEFAULT_TONE } = await import("../src/ui/voices.ts");
+    const { DEFAULT_VIBRATO } = await import("../src/ui/singing.ts");
+    const st = () => useStore.getState();
+    const now = () => voiceChoiceOf(st().body, st().source, useSing.getState().vibrato);
+    st().setBody(MALE);
+    chooseVoice("default");
+    expect(now()).toBe("default");
+
+    const child = VOICE_PRESETS.find((p) => p.id === "child1")!;
+    chooseVoice("child1");
+    expect(st().body).toEqual(child.body);
+    for (const [k, v] of Object.entries(child.tone)) expect(st().source[k as keyof typeof child.tone]).toBe(v);
+    expect(useSing.getState().vibrato).toBe(child.vibrato);
+    expect(now()).toBe("child1");
+    // pitch and breath pressure are not the preset's: they stay as the body set them
+    expect(st().source.pressure).toBeGreaterThan(0);
+
+    // edited by hand, it is no preset any more
+    st().setSource({ breathiness: 0.5 });
+    expect(now()).toBeNull();
+
+    // Default voice: the app's tone and vibrato, on the body chosen
+    chooseVoice("default");
+    expect(st().body).toEqual(child.body);
+    expect(st().source.breathiness).toBe(DEFAULT_TONE.breathiness);
+    expect(useSing.getState().vibrato).toBe(DEFAULT_VIBRATO);
+    expect(now()).toBe("default");
+
+    st().setBody(MALE);
+  });
+});
